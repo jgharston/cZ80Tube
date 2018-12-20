@@ -1,0 +1,2 @@
+hostio uses console.c for readline, so even if non-DOS, still needs console.c
+thoughts: update so #ifdef SDLavailable uses SDL assistance for keyscan

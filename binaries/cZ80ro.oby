@@ -1,0 +1,3 @@
+Dir <Obey$Dir>.^
+Set Z80Tube$Basic <Obey$Dir>.^.files.BBCBasic
+/binaries.cZ80riscos -debug 0 -mos files.MOS files.BBCBasic %1

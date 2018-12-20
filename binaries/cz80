@@ -1,0 +1,3 @@
+# Start cZ80Tube on Unix
+cd ..
+./binaries/cZ80unix -debug 0 -mos files/MOS files/BBCBasic

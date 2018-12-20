@@ -1,0 +1,15 @@
+| > MkRISCOS
+| Make cZ80Tube for RISC OS with Norcroft CC compiler
+| This file needs to be SetTyped to OBEY
+|
+| NB: cc does not understand // comments
+|
+Echo
+WimpSlot -min 4000K
+Dir <Obey$Dir>.^.riscos
+Spool listing
+cc -W -D__riscos__ -o cZ80tube c.z80tube
+Spool
+SetType listing Text
+IfThere cZ80Tube Then Delete listing
+IfThere cZ80Tube Then Copy cZ80Tube ^.binaries.cZ80riscos ~CDF~P~V

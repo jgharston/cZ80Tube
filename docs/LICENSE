@@ -1,0 +1,28 @@
+  cZ80Tube Emulator in C Version 0.27 Copyright 1987-2018 (C) J.G.Harston
+  =======================================================================
+
+This software is provided "as is," without warranty of any kind, express or
+implied.  In no event shall J.G.Harston or any contributors to cZ80Tube be
+held liable for any direct, indirect, incidental, special or consequential
+damages arising out of the use of or inability to use this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, definition, disclaimer, and this list of conditions.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, definition, disclaimer, and this list of conditions in
+       documentation and/or other materials provided with the distribution.
+
+    3. Altered versions - including, but not limited to, ports to new
+       operating systems, existing ports with new graphical interfaces, and
+       dynamic, shared, or static library versions - must be plainly marked
+       as such and must not be misrepresented as being the original source. 
+       Such altered versions must not be misrepresented as being releases by
+       J.G.Harston and must be plainly marked as being based up cZ80Tube.
+
+    4. J.G.Harston retains the right to use the names "Z80Tube" and
+       "cZ80Tube".

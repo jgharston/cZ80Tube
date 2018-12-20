@@ -1,0 +1,350 @@
+                     Z80Tube Emulator in C Version 0.27
+                     ==================================
+                     J.G.Harston - http://www.mdfs.net/
+                 70 Camm Street, Walkley, Sheffield, S6 3TR
+                             Date: 01-Dec-2018
+
+
+cZ80Tube emulates a Z80 coprocessor, written in C. On running, various
+command line options can be given:
+
+        cZ80 [-mos file] [file [params]]
+
+-mos    Provide a MOS file to load to the top of memory. This can provide
+        some interface facilities between the Z80 environment and the host. 
+        The default MOS code just passes all calls over. The MOS provided
+        within !Z80Tube provides some command line facilities that need to
+        be executed from with the Z80 environment to work properly.
+
+If a file is given, it is loaded into the Z80's memory. Any extra parameters
+are copied to the command buffer at &0080 for the loaded program to collect
+and deal with. An example command line would be:
+
+        cZ80 -mos files/MOS TestProg This is a command line
+
+This would start the emulator using the MOS file provided with cZ80Tube,
+load the file TestProg into memory, copy the text 'This is a command line'
+to &0080, and enter the code at the relevant entry point.
+
+
+Compiling
+---------
+To compile cZ80Tube compile the file z80tube.c with the appropriate
+identifier defined with the compiler's -D option. The identifiers checked
+for are in the host.h file. There are batch files in the build directory
+that compile for various platforms.
+
+MakeCCode is a BBC BASIC program that generates the z80.c source file for
+the Z80 engine. It can be run on cZ80Tube itself to create the source file
+with a command such as:
+
+        cZ80 -mos files/MOS files/BBCBasic src/MakeCCode > src/z80.c
+
+
+MOS Implementation
+------------------
+There is a limited MOS host implementation. Calls to the standard I/O
+routines at &FFCE to &FFF7 provide a minimum of the following functions.
+These can be expanded by added relavant code to hostio.c
+
+OSCLI
+ HL=>command string to pass to system.
+
+OSBYTE
+ A=0, L<>0: Return host type - L=6 - RISC OS, L=8 - Unix, L=32 - Win/DOS
+
+ A=129:     Wait for byte from input in HL or scan for keypress
+  HL=&0000+cs - max time in centiseconds to wait, return 8bit keypress
+  HL=&8000+cs - max time in centiseconds to wait, return 16bit keypress
+  HL=&FExx    - scan for internal keypress
+  HL=&FF00    - return hardware type
+  HL=&FFxx    - scan for keypress, see keyscan table
+  
+  If the input stream is the console (keyboard), then HL=&8000+cs will
+  return HL=&00xx for standard characters, and HL=&01xx for function
+  and cursor keys, as shown in the keycode table.
+
+ A=131:    Return lowest address in user memory (&0100)
+
+ A=132:    Return highest address in user memory (contents of &0006/7)
+
+OSWORD
+ A=0: Read line to address at (HL,HL+1).
+
+OSWRCH
+ Writes a characters to the output stream. If the output stream is not
+ redirected then the characters are interpreted to perform the following
+ console functions:
+   8 - left, 9 - right, 10 - down, 11 - up, 12 - CLS, 13 - CR
+   31,x,y - move to position, 30 - home
+
+OSRDCH
+ Waits for and returns a byte from the input stream. If the input stream is
+ attached to the console (keyboard), returns a keypress byte. This is the
+ ASCII code of the key pressed or an 8bit top-bit set byte is for function
+ keys and cursor keys, as shown in the keycode table.
+
+OSFILE
+ Whole file operations. (HL,HL+1)=>filename
+ A=&FF - Load a file to address in (HL+2,3,4,5) if (HL+6)=0.
+ A=&00 - Save a file. (HL+2,3,4,5)=address of first byte,
+        (HL+6,7,8,9)=address of byte after last byte.
+
+
+Console I/O
+-----------
+cZ80Tube uses the jgh/console console I/O library. This returns keycodes
+ordered in a sensible manner rather than the apparently random order of the
+native Windows keycodes, and allows top-bit set function and editing keys to
+be distingiushed from top-bit set characters.
+
+
+Keycode Top-Bit Table
+---------------------
+Function and editing keys return the following codes when OSBYTE 129 or
+OSRDCH is called. OSBYTE 129,&8000+cs will return the 16bit value &0100+x to
+distinguish function and editing keys from normal topbit set keys, such as
+accented characters. Note that some versions of Windows don't recognise the
+Shift, Ctrl and Alt keys properly, particularly with the editing keys.
+
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|   | 0 | 1 | 2 | 3 | 4 | 5 |  6 |  7 |  8  |  9 |  A  |  B  |  C |  D |  E |  F |
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|18x| F0| F1| F2| F3| F4| F5|  F6|  F7|  F8 |  F9| F10 | F11 | F12| F13| F14| F15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|19x|sF0|sF1|sF2|sF3|sF4|sF5| sF6| sF7| sF8 | sF9| sF10| sF11|sF12|sF13|sF14|sF15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ax|cF0|cF1|cF2|cF3|cF4|cF5| cF6| cF7| cF8 | cF9| cF10| cF11|cF12|cF13|cF14|cF15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Bx|aF0|aF1|aF2|aF3|aF4|aF5| aF6| aF7| aF8 | aF9| aF10| aF11|aF12|aF13|aF14|aF15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Cx|   |   |   |   |   |   | Ins| Del| Home| End| PgDn| PgUp| <- | -> | Dn | Up |
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Dx|   |   |   |   |   |   |sIns|sDel|sHome|sEnd|sPgDn|sPgUp| s<-| s->| sDn| sUp|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ex|   |   |   |   |   |   |cIns|cDel|cHome|cEnd|cPgDn|cPgUp| c<-| c->| cDn| cUp|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Fx|   |   |   |   |   |   |aIns|aDel|aHome|aEnd|aPgDn|aPgUp| a<-| a->| aDn| aUp|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+
+As can be seen from the table, bit 5 and bit 4 hold the state of the Shift,
+Control and Alt keys.
+
+Note that some versions of Windows don't recognise the Shift, Ctrl and Alt keys
+properly, particularly with the editing keys.
+
+
+Keyscan Table
+-------------
+When calling OSBYTE 129 with HL=&FFxx to scan for a key being pressed, the
+Acorn standard values are recognised. Note that some versions of Windows do
+not recognise the Shift, Ctrl and Alt keys properly.
+
+-001  Shift          -017  Q             -033  F0/Print    -049  1
+-002  Ctrl           -018  3             -034  W           -050  2
+-003  Alt            -019  4             -035  E           -051  D
+-004  Left Shift     -020  5             -036  T           -052  R
+-005  Left Ctrl      -021  F4            -037  7           -053  6
+-006  Left Alt       -022  8             -038  I           -054  U
+-007  Right Shift    -023  F7            -039  9           -055  O
+-008  Right Ctrl     -024  -             -040  0           -056  P
+-009  Right Alt      -025  ^             -041  _           -057  [
+-010  Mouse Select   -026  Left          -042  Down        -058  Up
+-011  Mouse Menu     -027  Keypad 6      -043  Keypad 8    -059  Keypad +
+-012  Mouse Adjust   -028  Keypad 7      -044  Keypad 9    -060  Keypad -
+-013                 -029  F11           -045  Break       -061  Keypad Enter
+-014                 -030  F12           -046  `,~   ',¬   -062  Insert
+-015                 -031  F10           -047  £,Yen       -063  Home
+-016                 -032  Scroll Lock   -048  Backspace   -064  PgUp
+
+-065  Caps Lock      -081  Shift Lock    -097  TAB         -113  Escape
+-066  A              -082  S             -098  Z           -114  F1
+-067  X              -083  C             -099  Space       -115  F2
+-068  F              -084  G             -100  V           -116  F3
+-069  Y              -085  H             -101  B           -117  F5
+-070  J              -086  N             -102  M           -118  F6
+-071  K              -087  L             -103  , <         -119  F8
+-072  @              -088  ;             -104  . >         -120  F9
+-073  :              -089  ]             -105  / ?         -121  \,|
+-074  Return         -090  Delete        -106  Copy/End    -122  Right
+-075  Keypad /       -091  Keypad # #,~  -107  Keypad 0    -123  Keypad 4
+-076  Keypad Del     -092  Keypad *      -108  Keypad 1    -124  Keypad 5
+-077  Keypad .       -093  Keypad ,      -109  Keypad 3    -125  Keypad 2
+-078  Num Lock       -094  =,+           -110  NoConvert   -126  WinLeft
+-079  PgDn           -095  Left  \,|     -111  Convert     -127  WinRight
+-080  ',"  ',@       -096  Right \,_     -112  Kana        -128  WinMenu
+
+Notes:
+-121: if keyboard has a single \ | key it is this keycode
+-95:  key between left Shift and Z, usually labelled \ |
+-96:  key between ? and right Shift, usually labelled \ _
+
+
+Zero Page Locations
+-------------------
+0000:  JP RESET         Jumping to location &0000 is used to quit a program. 
+                        The emulator sets this to point to MOS_start+3, the
+                        entry to quit the emulator, and starts running
+                        programs with the return address &0000 on the
+                        stack.
+
+0003:   DEFB 0          IOBYTE within CP/M
+0004:   DEFB 0          Drive and User within CP/M
+
+0005:   JP BDOS         Jumping to location &0005 is used to call a CPM BDOS
+                        routine. The emulator sets this to point to
+                        MOS_start, which returns with all registers
+                        unchanged. When CPM is running, the BDOS points
+                        this entry to the BDOS service routine. The value at
+                        &0006/7, the destination of the jump can also be
+                        used as the value of BDOS+6, the byte after the
+                        highest byte in memory available to the user.
+
+0008:
+ to                     These locations are not set to anything.
+000D:
+
+000E:   POP HL          Calling location &000E with load the HL register
+                        with the address of the location after the call, ie
+                        CALL &000E can be thought of as LD HL,PC, as a
+                        complement to JP (HL) which can be thought of as
+                        LD PC,HL.
+000F:   JP (HL)         Calling location &000F will jump to the address in
+                        the HL register, ie CALL &000F can be thought of as
+                        CALL (HL) as a complement to JP (HL).
+
+0010:
+ to                     These locations are not set to anything.
+0037:
+
+0038:                   Error restart. The MOS initialises this to the
+ to                     default error handler, and any foreground program
+003A:                   will set it to its own error handler.
+
+003B:
+ to                     These locations are not set to anything.
+007F:
+
+0080:                   Parameter buffer. This byte contains the length of
+                        any passed parameter string, ie zero if no
+                        parameters present.
+0081:                   This buffer contains any passed parameters. Note
+ to                     that there may not be a CR at the end of this
+00FF:                   string.
+
+
+Z80 MOS Entry Points
+--------------------
+PRHEX     &FFAA  Print A in hex
+On entry: A = value to be printed
+On exit:  A is corrupted
+
+This routine prints out the A register in hexadecimal to two digits and
+leading zeros. This routine is overwritten by the Acorn BIOS in CPM.
+
+PR2HEX    &FFAD  Print HL in hex
+On entry: HL = value to be printed
+On exit:  A is corrupted
+               
+This routine prints out the HL register in hexadecmial to four digits and
+leading zeros. This routine is overwritten by the Acorn BIOS in CPM.
+
+PRTEXT    &FFB3  Print in-line text
+On entry: -
+On exit:  A = 0
+
+This routine prints out the text following the call to OSASCI. The text
+needs to be terminated with a zero byte, eg:
+          CALL PRTEXT
+          DEFM "HELLO THERE":NOP
+          \ continue here
+
+PRSTRING  &FF9B  Print text
+On entry: HL = address of string to print
+On exit:  HL = address after &00 byte after string printed
+          A  = 0
+
+This routine prints out the text pointed to by HL. The text needs to be
+terminated with a zero byte.
+
+
+OSFIND    &FFCE  Open or close a file
+OSGBPB    &FFD1  Multiple byte file access
+OSBPUT    &FFD4  Put a byte to a file
+OSBGET    &FFD7  Get a byte from a file
+OSARGS    &FFDA  Read or set file arguments
+OSFILE    &FFDD  Load or save file
+OSRDCH    &FFE0  Input a character
+OSASCI    &FFE3  Print a character, with CR converted to LF,CR
+OSNEWL    &FFE7  Print a LF,CR sequence
+OSWRCH    &FFEE  Print a character
+OSWORD    &FFF1  Do an OSWORD call
+OSBYTE    &FFF4  Do an OSBYTE call
+OSCLI     &FFF7  Interpret a command
+
+The following three addresses hold system vectors:
+
+BRKV      &FFFA  Address of error handler
+EVENTV    &FFFC  Address of event handler
+INTV      &FFFE  Address of primary interupt handler
+
+
+CPU Implementation
+------------------
+All documented Zilog Z80 opcodes are implemented, as well as the unofficial
+instructions SLS r, and accessing the upper or lower halves of the index
+registers as a single byte register, ie IXL, IXH, IYL, IYH. Currently,
+INI[R], IND[R], OTI[R] and OTD[R] are unimplemented and act as NOPs. An IN
+instruction issues the Service_Z80TubeIN call and an OUT instruction issues
+a Service_Z0TubeOUT call. A Reset issues a Service_Z80TubeReset call.
+
+All indexed rotation/bit instructions manipulate (IX+n) or (IY+n), so, for
+example, FDCBnn00 to FDCBnn05 and FDCBnn07 all perform as though they were
+FDCBnn06, ie RLC (IY+nn). On a real Z80 the 8bit registers are stored to
+after the operation. For instance, FDCBnn00 does a RLC (IY+nn) and then
+stores the result in B. This is usually written as RLC (IY+nn)->B.
+
+Sixteen extra instructions have been added to control the emulator and to
+comunicate with the host, EDF0 to EDFF.
+
+The bottom seven bits of the R register are incremented every time R is
+loaded from, ie every LD A,R instruction, rather than on every instruction
+cycle. Bit 7 of R remains the same value as from the last LD R,A
+instruction.
+
+The flags register is manipulated as specified. Unoffical flag effects, such
+as bit 5 folling bit 5 of an arithmetic result, are not implemented.
+
+
+Environment
+-----------
+Z80$Basic
+  The *Basic command tries to load and enter a BASIC interpeter. If Z80$Basic
+  is set to point to a file, it will be loaded to &0100 and entered there. If
+  not, the *Basic command has no effect.
+
+
+Extras
+------
+The files directory contains a few useful extra and/or essential items:
+
+BBCBasic   BBC BASIC for Z80.
+ClockSp    BBC BASIC benchmark program that determines the speed of the
+           interpreter relative to the original BBC B. Running on an A5000
+           Z80Tube reposts a speed of 2.48MHz. A test on a 900MHz Pentium
+           PC reports a speed of 77MHz. A real Z80 CoProcessor reports a
+           speed of 2.68MHz.
+KBDTest    Display keyboard keypress values.
+KeyScan    Display keyscan values.
+KeyTest    Graphically display keyscan values.
+MOS        Default MOS interface code.
+ScanTest   Display 16bit keypress values.
+
+
+Version History
+---------------
+v0.25 07-Sep-2003
+v0.26 31-Aug-2004 Dave Daniels added OSWORD &7F and OSWORD &FF for CPM support.
+                  CPI/CPD/LDI/LDD sets P/V flags correctly. I/O memory
+                  declarations moved to main.c
+v0.27 01-Dec-2018 Updated console module, added null *FX command.

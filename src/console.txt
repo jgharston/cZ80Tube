@@ -1,0 +1,147 @@
+                  Windows Console Keyboard and VDU Library
+                  ========================================
+                           J.G.Harston and others
+                        http://mdfs.net/System/C/Lib
+                 70 Camm Street, Walkley, Sheffield, S6 3TR
+                      Version 0.12 - Date: 25-Nov-2018
+
+
+This Windows console I/O library primarily provides functions to return keyboard
+keypresses with the keycodes ordered in a regular manner rather than the apparently
+random order of the native Windows keycodes, and allows top-bit set function and
+editing keys to be distinguished from top-bit set characters. It also provides a
+simple console output function that implements simple cursor movement.
+
+
+int con_rdch(void) - Read single character from input stream
+------------------------------------------------------------
+If the input stream is not attached to the keyboard then the next input byte is
+immediately returned. When reading from the keyboard, function and editing keys
+return 0x100+x to distinguish them from normal top-bit set keys, such as accented
+characters. The values returned are in the following table.
+
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|   | 0 | 1 | 2 | 3 | 4 | 5 |  6 |  7 |  8  |  9 |  A  |  B  |  C |  D |  E |  F |
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|18x| F0| F1| F2| F3| F4| F5|  F6|  F7|  F8 |  F9| F10 | F11 | F12| F13| F14| F15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|19x|sF0|sF1|sF2|sF3|sF4|sF5| sF6| sF7| sF8 | sF9| sF10| sF11|sF12|sF13|sF14|sF15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ax|cF0|cF1|cF2|cF3|cF4|cF5| cF6| cF7| cF8 | cF9| cF10| cF11|cF12|cF13|cF14|cF15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Bx|aF0|aF1|aF2|aF3|aF4|aF5| aF6| aF7| aF8 | aF9| aF10| aF11|aF12|aF13|aF14|aF15|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Cx|   |   |   |   |   |   | Ins| Del| Home| End| PgDn| PgUp| <- | -> | Dn | Up |
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Dx|   |   |   |   |   |   |sIns|sDel|sHome|sEnd|sPgDn|sPgUp| s<-| s->| sDn| sUp|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ex|   |   |   |   |   |   |cIns|cDel|cHome|cEnd|cPgDn|cPgUp| c<-| c->| cDn| cUp|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+|1Fx|   |   |   |   |   |   |aIns|aDel|aHome|aEnd|aPgDn|aPgUp| a<-| a->| aDn| aUp|
++---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
+As can be seen from the table, bit 5 and bit 4 hold the state of the Shift, Control
+and Alt keys.
+
+Note that some versions of Windows don't recognise the Shift, Ctrl and Alt keys
+properly, particularly with the editing keys.
+
+
+int con_keyscan(int key) - Scan for keypress
+--------------------------------------------
+con_keyscan() checks if a specific key is pressed, and returns non-zero if the key
+is pressed. The keyscan numbers to pass are in the following table. Note that some
+versions of Windows do not recognise the Shift, Ctrl and Alt keys properly.
+
+-001  Shift          -017  Q             -033  F0/Print    -049  1
+-002  Ctrl           -018  3             -034  W           -050  2
+-003  Alt            -019  4             -035  E           -051  D
+-004  Left Shift     -020  5             -036  T           -052  R
+-005  Left Ctrl      -021  F4            -037  7           -053  6
+-006  Left Alt       -022  8             -038  I           -054  U
+-007  Right Shift    -023  F7            -039  9           -055  O
+-008  Right Ctrl     -024  -             -040  0           -056  P
+-009  Right Alt      -025  ^             -041  _           -057  [
+-010  Mouse Select   -026  Left          -042  Down        -058  Up
+-011  Mouse Menu     -027  Keypad 6      -043  Keypad 8    -059  Keypad +
+-012  Mouse Adjust   -028  Keypad 7      -044  Keypad 9    -060  Keypad -
+-013                 -029  F11           -045  Break       -061  Keypad Enter
+-014                 -030  F12           -046  `/~/?       -062  Insert
+-015                 -031  F10           -047  UKP/Yen     -063  Home
+-016                 -032  Scroll Lock   -048  Backspace   -064  PgUp
+
+-065  Caps Lock      -081  Shift Lock    -097  TAB         -113  Escape
+-066  A              -082  S             -098  Z           -114  F1
+-067  X              -083  C             -099  Space       -115  F2
+-068  F              -084  G             -100  V           -116  F3
+-069  Y              -085  H             -101  B           -117  F5
+-070  J              -086  N             -102  M           -118  F6
+-071  K              -087  L             -103  , <         -119  F8
+-072  @              -088  ;             -104  . >         -120  F9
+-073  :              -089  ]             -105  / ?         -121  \,|
+-074  Return         -090  Delete        -106  Copy/End    -122  Right
+-075  Keypad /       -091  Keypad # #/~  -107  Keypad 0    -123  Keypad 4
+-076  Keypad Del     -092  Keypad *      -108  Keypad 1    -124  Keypad 5
+-077  Keypad .       -093  Keypad ,      -109  Keypad 3    -125  Keypad 2
+-078  Num Lock       -094  =/+           -110  NoConvert   -126  WinLeft
+-079  PgDn           -095  Left  \,|     -111  Convert     -127  WinRight
+-080  '/"  '/@       -096  Right \,_     -112  Kana        -128  WinMenu
+
+Notes:
+-121: if keyboard has a single \ | key it is this keycode
+-95:  key between left Shift and Z, usually labelled \ |
+-96:  key between ? and right Shift, usually labelled \ _
+
+
+int con_readln(char *addr, int max, int lo, int hi) - Read line of input
+------------------------------------------------------------------------
+char *addr - address in memory to store in the input line.
+int max    - the maximum number of characters to read
+int lo     - lowest character to accept
+int hi     - highest character to accept
+Returns:   <0  - input terminated with Escape
+           >=0 - input terminated with Return, returns the line length
+
+An interactive line editor that reads a single line of text from the current input
+stream by calling con_rdch(). BackSpace and Delete will delete a single character,
+Ctrl-U deletes the entire line. Input can be terminated by pressing Return or
+Escape, and the length of the entered line, excluding the terminator, is returned,
+or <0 if Escape is pressed.
+
+
+void con_wrch(int c) - Write a character to output
+--------------------------------------------------
+Sends characters to the current output stream. If the output stream is the console,
+the following cursor movement is implmented:
+      0x08 - cursor left        0x0C - clear screen
+      0x09 - cursor right       0x0D - carriage return
+      0x0A - cursor down        0x1E - home cursor to (0,0)
+      0x0B - cursor up          0x1F,x,y - move cursor to (x,y)
+
+
+void con_getxy(int *x, int *y) - Return cursor position
+-------------------------------------------------------
+Sets x and y to the text output cursor position, counting from (0,0).
+
+
+Notes
+-----
+The console library uses some functions from the CONIO library for cursor
+positioning. With some compilers the required functions are not present, and the
+console library defines them itself. If USECONIO is defined the CONIO functions are
+used, if CONIO is not defined the console library defines its own functions.
+
+
+History
+-------
+v0.12 25-Nov-2018 Added con_getxy(), filled in gaps and errors with Japanese
+		  keyscans, Ctrl/Shift/Alt handling of special keys rewritten.
+v0.11 07-Dec-2003 con_wrch(9) uses gotoxy().
+v0.10 1997
+
+
+Disclaimer
+----------
+This console library is provided "as-is" and is Copyright (C) J.G.Harston. No
+responsibility can or will be taken for any loss, damage, etc, whatsoever through
+its use. The library may be freely redistributed and used in any program, with its
+use acknowledged in any documentation.

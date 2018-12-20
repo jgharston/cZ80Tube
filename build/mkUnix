@@ -1,0 +1,11 @@
+# Make cZ80Tube for Unix
+
+cd ./../src
+gcc z80tube.c -o z80tube -w -D__unix__
+mkdir ../binaries
+cp -f z80tube ../binaries/cZ80unix > /dev/null
+rm -f z80tube > /dev/null
+cd ../build
+
+# To run with default files:
+# cz80unix -mos ../files/MOS ../files/BBCBasic
