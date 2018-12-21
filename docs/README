@@ -2,7 +2,7 @@
                      ==================================
                      J.G.Harston - http://www.mdfs.net/
                  70 Camm Street, Walkley, Sheffield, S6 3TR
-                             Date: 01-Dec-2018
+                             Date: 21-Dec-2018
 
 
 cZ80Tube emulates a Z80 coprocessor, written in C. On running, various
@@ -53,9 +53,13 @@ OSCLI
 OSBYTE
  A=0, L<>0: Return host type - L=6 - RISC OS, L=8 - Unix, L=32 - Win/DOS
 
- A=129:     Wait for byte from input in HL or scan for keypress
-  HL=&0000+cs - max time in centiseconds to wait, return 8bit keypress
-  HL=&8000+cs - max time in centiseconds to wait, return 16bit keypress
+ A=128:     Read device or buffer (ADVAL)
+  HL=&FFFF    - returns 0 if no keyboard input pending, <>0 otherwise
+  HL=&0010    - waits for and returns 16-bit keypress
+
+ A=129:     Wait for byte from input in HL or scan for keypress (INKEY)
+  HL=&0000+cs - max time in centiseconds to wait, return 8-bit keypress
+  HL=&8000+cs - max time in centiseconds to wait, return 16-bit keypress
   HL=&FExx    - scan for internal keypress
   HL=&FF00    - return hardware type
   HL=&FFxx    - scan for keypress, see keyscan table
@@ -68,6 +72,8 @@ OSBYTE
 
  A=132:    Return highest address in user memory (contents of &0006/7)
 
+ A=134:    Return L=POS and H=VPOS
+
 OSWORD
  A=0: Read line to address at (HL,HL+1).
 
@@ -78,10 +84,15 @@ OSWRCH
    8 - left, 9 - right, 10 - down, 11 - up, 12 - CLS, 13 - CR
    31,x,y - move to position, 30 - home
 
+ If cZ80Tube is built with CONVDU_ANSI defined then ANSI colour sequences
+ are used to select text colours with:
+   17,n - select text colour
+   20   - select default text colours
+
 OSRDCH
  Waits for and returns a byte from the input stream. If the input stream is
  attached to the console (keyboard), returns a keypress byte. This is the
- ASCII code of the key pressed or an 8bit top-bit set byte is for function
+ ASCII code of the key pressed or an 8-bit top-bit set byte for function
  keys and cursor keys, as shown in the keycode table.
 
 OSFILE
@@ -93,10 +104,10 @@ OSFILE
 
 Console I/O
 -----------
-cZ80Tube uses the jgh/console console I/O library. This returns keycodes
-ordered in a sensible manner rather than the apparently random order of the
-native Windows keycodes, and allows top-bit set function and editing keys to
-be distingiushed from top-bit set characters.
+cZ80Tube uses the JGH Console I/O library. This returns keycodes ordered in a
+sensible manner rather than the apparently random order of the native Windows
+keycodes, and allows top-bit set function and editing keys to be distingiushed
+from top-bit set characters.
 
 
 Keycode Top-Bit Table
@@ -153,8 +164,8 @@ not recognise the Shift, Ctrl and Alt keys properly.
 -011  Mouse Menu     -027  Keypad 6      -043  Keypad 8    -059  Keypad +
 -012  Mouse Adjust   -028  Keypad 7      -044  Keypad 9    -060  Keypad -
 -013                 -029  F11           -045  Break       -061  Keypad Enter
--014                 -030  F12           -046  `,~   ',¬   -062  Insert
--015                 -031  F10           -047  £,Yen       -063  Home
+-014                 -030  F12           -046  `,~   ',?   -062  Insert
+-015                 -031  F10           -047  ?,Yen       -063  Home
 -016                 -032  Scroll Lock   -048  Backspace   -064  PgUp
 
 -065  Caps Lock      -081  Shift Lock    -097  TAB         -113  Escape
@@ -194,7 +205,7 @@ Zero Page Locations
 0005:   JP BDOS         Jumping to location &0005 is used to call a CPM BDOS
                         routine. The emulator sets this to point to
                         MOS_start, which returns with all registers
-                        unchanged. When CPM is running, the BDOS points
+                        unchanged. When CP/M is running, the BDOS points
                         this entry to the BDOS service routine. The value at
                         &0006/7, the destination of the jump can also be
                         used as the value of BDOS+6, the byte after the
@@ -240,14 +251,14 @@ On entry: A = value to be printed
 On exit:  A is corrupted
 
 This routine prints out the A register in hexadecimal to two digits and
-leading zeros. This routine is overwritten by the Acorn BIOS in CPM.
+leading zeros. This routine is overwritten by the Acorn BIOS in CP/M.
 
 PR2HEX    &FFAD  Print HL in hex
 On entry: HL = value to be printed
 On exit:  A is corrupted
                
 This routine prints out the HL register in hexadecmial to four digits and
-leading zeros. This routine is overwritten by the Acorn BIOS in CPM.
+leading zeros. This routine is overwritten by the Acorn BIOS in CP/M.
 
 PRTEXT    &FFB3  Print in-line text
 On entry: -
@@ -313,15 +324,23 @@ cycle. Bit 7 of R remains the same value as from the last LD R,A
 instruction.
 
 The flags register is manipulated as specified. Unoffical flag effects, such
-as bit 5 folling bit 5 of an arithmetic result, are not implemented.
+as bit 5 following bit 5 of an arithmetic result, are not implemented.
 
 
 Environment
 -----------
-Z80$Basic
-  The *Basic command tries to load and enter a BASIC interpeter. If Z80$Basic
-  is set to point to a file, it will be loaded to &0100 and entered there. If
-  not, the *Basic command has no effect.
+Z80Tube$Basic
+  The *BASIC command tries to load and enter a BASIC interpeter. If
+  Z80Tube$Basic points to a file, it will be loaded to &0100 and entered
+  there. If not, the *BASIC command has no effect.
+
+Escape/Break/etc.
+  When building for Windows the Interupt character cannot be changed from
+  CHR$3, so it is disabled instead, and Ctrl-Break is used to generate an
+  Escape state. CHR$27 will generate an Escape state when read with GET or
+  INKEY unless disabled with *FX229,1.
+  
+  When building for UNIX or RISC OS, CHR$27 is set to the Escape character.
 
 
 Extras
@@ -347,4 +366,5 @@ v0.25 07-Sep-2003
 v0.26 31-Aug-2004 Dave Daniels added OSWORD &7F and OSWORD &FF for CPM support.
                   CPI/CPD/LDI/LDD sets P/V flags correctly. I/O memory
                   declarations moved to main.c
-v0.27 01-Dec-2018 Updated console module, added null *FX command.
+v0.27 20-Dec-2018 Updated console module, supports ANSI i/o, added *FX command,
+                  updated unix tty control.

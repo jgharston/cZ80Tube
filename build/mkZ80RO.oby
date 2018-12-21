@@ -1,0 +1,8 @@
+| Makefile for RISC OS to create C source for Z80 engine
+|
+Echo <26><12>Creating C Code for z80/c
+Dir <Obey$Dir>.^
+Spool z80/c
+Run src.MakeCCode
+Spool
+SetType z80/c Text

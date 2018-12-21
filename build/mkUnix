@@ -2,7 +2,7 @@
 
 cd ./../src
 gcc z80tube.c -o z80tube -w -D__unix__
-mkdir ../binaries
+mkdir -p ../binaries
 cp -f z80tube ../binaries/cZ80unix > /dev/null
 rm -f z80tube > /dev/null
 cd ../build

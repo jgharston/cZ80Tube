@@ -42,6 +42,8 @@
 #define OS_COMPACT		0xF5
 #define OS_SINCLAIR		0xE0
 #define OS_AMSTRAD		0xD0
+#define OS_PDP11UNIX7		0xB7
+#define OS_PDP11UNIX6		0xB6
 #define OS_RISCOS1		0xA0
 #define OS_RISCOS2		0xA1
 #define OS_RISCOS201		0xA2
@@ -58,37 +60,61 @@
 
 /* Determine the target environment */
 #ifdef __riscos__
-#define Z80_CPU_ARM
-#define Z80_IO_RO
-#define Z80_FILE_RO
-#define Z80_HOST	HOST_RISCOS
-#endif
-
-
-#ifdef __unix__
-#ifndef __dos__
-#define Z80_IO_UNIX
-#define Z80_FILE_UNIX
-#define Z80_HOST	HOST_UNIX
-#define Z80_OS		OS_UNIX
+#define Z80IO_RO
+#define Z80FILE_RO
+#define Z80HOST	  HOST_RISCOS
+#ifdef __CC_NORCROFT
+#define Z80TARGET "RISC OS/NCC"
+#else
+#define Z80TARGET "RISC OS"
 #endif
 #endif
 
 
-#ifdef __win32__
-#define Z80_CPU_86
-#define Z80_IO_WIN
-#define Z80_FILE_WIN
-#define Z80_HOST	HOST_WINDOWS
-#define Z80_OS		OS_WINDOWS
+#if defined(__unix__) || defined(__linux__)
+#define Z80IO_UNIX
+#define Z80FILE_UNIX
+#define Z80HOST	  HOST_UNIX
+#define Z80OS	  OS_UNIX
+#ifdef __linux__
+#define Z80UNIX "LINUX"
+#else
+#define Z80UNIX "UNIX"
+#endif
+#ifdef __GNUC__
+#define Z80TARGET Z80UNIX "/GCC"
+#else
+#define Z80UNIX Z80UNIX
+#endif
 #endif
 
 
-#ifdef __dos__
-#define Z80_CPU_86
-#define Z80_IO_DOS
-#define Z80_FILE_DOS
-#define Z80_HOST	HOST_DOS
-#define Z80_OS		OS_DOS
+#ifdef __WIN32__
+#define Z80IO_WIN
+#define Z80FILE_WIN
+#define Z80HOST	  HOST_WINDOWS
+#define Z80OS	  OS_WINDOWS
+#ifdef __MINGW32__
+#define Z80TARGET "Win32/MinGW"
+#else
+#ifdef _MSC_VER
+#define Z80TARGET "Win32/MSC"
+#else
+#define Z80TARGET "Win32"
+#endif
+#endif
+#endif
+
+
+#ifdef __DOS__
+#define Z80IO_DOS
+#define Z80FILE_DOS
+#define Z80HOST	  HOST_DOS
+#define Z80OS	  OS_DOS
+#ifdef __DJGPP__
+#define Z80TARGET "DOS/DJGPP"
+#else
+#define Z80TARGET "DOS"
+#endif
 #endif
 

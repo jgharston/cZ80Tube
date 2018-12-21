@@ -5,8 +5,16 @@
 /* version 0.12: added local versions of CONIO funcions		*/
 /* added con_getxy(), filled in and corrected JP keys		*/
 /* Ctrl/Shift handling of special keys rewritten		*/
+/* version 0.13: added ANSI input and output			*/
+/*								*/
+/* ANSI output can be enabled with #define CONVDU_ANSI		*/
+/* linux target defaults to using CONVDU_ANSI			*/
+/* ANSI input can be enabled with #define CONKBD_ANSI		*/
+/* linux target defaults to using CONKBD_ANSI			*/
+/*								*/
 
-#ifdef __win32__
+
+#ifdef __WIN32__
 #define CONKBD_PC
 #define CONVDU_PC
 #include <windows.h>
@@ -16,7 +24,7 @@
 #include <io.h>
 #endif
 
-#ifdef __dos__
+#ifdef __DOS__
 #define CONKBD_PC
 #define CONVDU_PC
 #include <stdio.h>
@@ -26,8 +34,15 @@
 #endif
 #endif
 
+#ifdef __linux__
+#define CONKBD_ANSI
+#define CONVDU_ANSI
+#include <stdio.h>
+#include <sys/types.h>
+#endif
 
-#ifdef CONKBD_PC
+
+#ifdef CONVDU_PC
 #ifndef USECONIO
 /* If CONIO does not provide these functions, provide them ourselves */
 int wherex()
@@ -53,34 +68,41 @@ SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
 void clrscr()
-{ system("cls"); }	/* Horrible bodge */
+{ system("cls"); }	/* MS-recommended bodge */
 #endif /* USECONIO */
-
-#else /* !CONKBD_PC */
+#else /* CONVDU_PC */
 
 int wherex() { return 0; }
 int wherey() { return 0; }
-void gotoxy(int x, int y) { }
-#ifdef __unix__
- void clrscr() { system("clear"); }
- int kbhit() { return 1; }
- #else
- void clrscr() { system("cls"); }
+
+int kbhit()  {
+#ifdef FIONREAD
+int num=0;
+ioctl(STDIN_FILENO, FIONREAD, &num);
+return num;
+#else
+return 1;
 #endif
+} 
+
+#ifdef CONVDU_ANSI
+void clrscr() { fputs("\x1B[2J\x1B[1;1H",stdout); }
+void gotoxy(int x, int y) { printf("\x1B[%d;%dH",y&255,x&255); }
+#else /* CONVDU_ANSI */
+void clrscr() { system("cls"); }
+void gotoxy(int x, int y) { }
+#endif /* CONVDU_ANSI */
+
 #endif /* !CONKBD_PC */
 
 
-/* VDU queue */
-int vduqlen=0;
-char lastchar=0;
+/* VDU queue and variables */
 char vduq[10];
-
-
-/* con_init() - initialise console					*/
-/* -------------------------------------------------------------------- */
-void con_init()
-{
-}
+int vduqlen=0;
+#ifdef CONVDU_ANSI
+char ansichars[]="\x1B[0;1;5;4;7;30;40m";
+int ansifgd='7'; int ansibgd='0';
+#endif
 
 
 /* con_wrch(int c) - write a character to output			*/
@@ -89,20 +111,54 @@ void con_init()
 /*									*/
 void con_wrch(int c)
 {
+char *seq;
+
 if (isatty(fileno(stdout)) == 0) { putchar(c); return; }
 if (vduqlen) {
   vduq[vduqlen--]=c;
   if (vduqlen != 0) return;
   switch(vduq[0]) {
-    case 22: clrscr(); break;			/* MODE		*/
+#ifdef CONVDU_ANSI
+    case 17:						/* COLOUR	*/
+      seq=&ansichars[4];
+      if (vduq[1] & 8)  { *seq++='1'; *seq++=';'; }	/* Bright	*/
+      if (vduq[1] & 16) { *seq++='5'; *seq++=';'; }	/* Flash	*/
+      if (vduq[1] & 32) { *seq++='4'; *seq++=';'; }	/* Underline	*/
+      if (vduq[1] & 64) { *seq++='7'; *seq++=';'; }	/* Inverse	*/
+      if (vduq[1] & 128)  ansibgd='0'+(vduq[1] & 7);	/* Background	*/
+      else                ansifgd='0'+(vduq[1] & 7);	/* Foreground	*/
+      if (ansibgd=='0') ansibgd='9';
+      *seq++='3'; *seq++=ansifgd; *seq++=';';
+      *seq++='4'; *seq++=ansibgd; *seq++='m';
+      *seq++=0;
+      fputs(ansichars,stdout);
+    break;
+#endif
+    case 22:					/* MODE		*/
+#ifdef CONVDU_ANSI
+      fputs("\x1B[0m",stdout);			/* Reset colours*/
+      ansifgd='7'; ansibgd='0';
+#endif
+      clrscr(); break;
     case 31: gotoxy(vduq[2]+1,vduq[1]+1); break; /* TAB()	*/
     }
   return;
   }
 switch (c) {
+#ifdef CONVDU_ANSI
+  case 9:   fputs("\x1B[C",stdout); break;	/* Move right	*/
+  case 11:  fputs("\x1B[A",stdout); break;	/* Move upwards	*/
+#else
   case 9:   gotoxy(wherex()+1,wherey()); break;	/* Move right	*/
   case 11:  gotoxy(wherex(),wherey()-1); break;	/* Move upwards	*/
+#endif
   case 12:  clrscr(); break;			/* CLS		*/
+  case 17:  vduq[0]=c; vduqlen=1; break;	/* COLOUR	*/
+#ifdef CONVDU_ANSI
+  case 20:  fputs("\x1B[0m",stdout);		/* Reset colours*/
+            ansifgd='7'; ansibgd='0';
+            break;
+#endif
   case 22:  vduq[0]=c; vduqlen=1; break;	/* MODE		*/
   case 23:  vduq[0]=c; vduqlen=9; break;	/* VDU 23	*/
   case 30:  gotoxy(1,1); break;			/* HOME		*/
@@ -114,11 +170,13 @@ switch (c) {
 
 
 /* con_readln(addr, max, lo, hi) - read a line of input			*/
+/* con_readln(addr, max, lo, hi, flags) - read a line of input		*/
 /* -------------------------------------------------------------------- */
 /* char *addr = location to store entered line				*/
 /* int max    = longest permissable line				*/
 /* int lo     = lowest allowable character				*/
 /* int hi     = highest allowable character				*/
+/* int flags  = 							*/
 /* Returns:								*/
 /* int        = length of entered line (offset to terminator)		*/
 /*		or <0 for Escape					*/
@@ -156,8 +214,9 @@ for (;;) {
 mem[(int)addr]=0;
 if (c == 27) return (-1);
 con_wrch(10); con_wrch(13);
-return(l);
+return l;
 }
+
 
 #ifdef CONKBD_PC
 /* key <0xC0 is returned key, else base key to xor with Shift/Ctrl/Alt	*/
@@ -196,6 +255,16 @@ unsigned char winkey[]={
 0xf8,0xf9,0xfa,0xfb,0xfc,0xfd,0xfe,0xff };
 #endif
 
+#ifdef CONKBD_ANSI
+unsigned char ansikey[]={
+0x00,0xC8,0xC6,0xC7,0xC9,0xCB,0xCA,0x00, /* 0,Home,Ins,Del,End,PgUp,PgDn,7 */
+0x00,0x00,0x00,0x81,0x82,0x83,0x84,0x85, /* 8,9,10,F1,F2,F3,F4,F5          */
+0x00,0x86,0x87,0x88,0x89,0x8A,0x00,0x8B, /* 16,F6,F7,F8,F9,F10,22,F11      */
+0x8C,0x8D,0x8E,0x00,0x8F,0x00,0x00,0x00, /* F12,F13,F14,27,F15,F16,30,F17  */
+0x00,0x00,0x00,0x00,0xCC,0xCD,0xCE,0xCF  /* F18,F19,F20,35,<-,->,Down,Up   */
+};
+#endif
+
 
 /* con_rdch() - read a byte from input stream				*/
 /* -------------------------------------------------------------------- */
@@ -207,12 +276,11 @@ unsigned char winkey[]={
 /*									*/
 int con_rdch()
 {
-#ifndef CONKBD_PC
-  return(getchar());
-#else
 int ch,s,c,a;
-
 if (isatty(fileno(stdin)) == 0) if ((ch=getchar()) != EOF) return(ch);
+
+#ifndef CONKBD_ANSI
+#ifdef CONKBD_PC
 ch=getch();				/* Read from console		*/
 /* to do: if <0x20 and modifier pressed, do a translate */
 if (ch != 0 && ch != 0xe0) return(ch);	/* Standard keyboard chars	*/
@@ -228,6 +296,47 @@ if (s) ch=ch ^ 0x10;			/* SHIFT pressed		*/
 if (c) ch=ch ^ 0x20;			/* CTRL pressed			*/
 if (a) ch=ch ^ 0x30;			/* ALT pressed			*/
 return(ch);				/* Other keys need extra help	*/
+#else
+return getchar();
+#endif
+#else
+
+int key=0;
+int mod=0;
+
+fflush(stdout);
+read(STDIN_FILENO, &ch, 1);		/* Read without flushing	*/
+ch=ch & 0xFF;
+if (ch != 27)     return ch;		/* Not <esc>			*/
+if (kbhit() == 0) return ch;		/* Nothing pending		*/
+
+/* ANSI key sequence is:
+ *    <esc> [ (<num>) (;<num>) nondigit
+ * or <esc> O nondigit			*/
+
+ch=getchar();
+if (ch=='O') mod=1;			/* Convert <esc>O to <esc>[1	*/
+  else if(ch!='[') return (ch | 0x100);	/* Not opening <esc>[ or <esc>O	*/
+
+while ((ch=getchar())<'@') {		/* Parse through non-alphas	*/
+  if (ch>='0' && ch<='9') {		/* Digit - add to current num	*/
+    mod=mod*10+(ch-'0');
+    }
+  if (ch==';') {			/* Semi - step to next number	*/
+    key=mod; mod=0;
+    }
+  }
+if (key==0) { key=mod; mod=1; }		/* Special cases		*/
+if (ch>='A' && ch<='D') key=39-(ch-'A');
+if (ch>='P' && ch<='S') key=11+(ch-'P');
+if (ch=='F') key=4;
+if (ch=='H') key=1;
+mod=mod-1;				/* Convert modifiers to bitmap	*/
+ch=ansikey[key];			/* Translate keypress		*/
+if (mod & 1) ch=ch ^ 0x10;		/* SHIFT pressed		*/
+if (mod & 4) ch=ch ^ 0x20;		/* CTRL pressed			*/
+if (mod & 2) ch=ch ^ 0x30;		/* ALT pressed			*/
+return (ch | 0x100);
 #endif
 }
 
@@ -384,7 +493,7 @@ if (key <0x080) {			/* Scan for single key		*/
 /* Note: if a console app, this is the ID from when the program started	*/
     switch (key) {
       case 24: return (GetAsyncKeyState(0xDE)<0 ? -1 : 0); /* ^~      */
-      case 46: return (GetAsyncKeyState(0xDC)<0 ? -1 : 0); /* £/Y/etc */
+      case 46: return (GetAsyncKeyState(0xDC)<0 ? -1 : 0); /* ?/Y/etc */
       case 72: return (GetAsyncKeyState(0xBA)<0 ? -1 : 0); /* :       */
       case 87: return (GetAsyncKeyState(0xBB)<0 ? -1 : 0); /* ;       */
       case 90:						   /* #/~     */
@@ -417,4 +526,19 @@ void con_getxy(int *x, int *y)
 {
 *x=wherex()-1;
 *y=wherey()-1;
+}
+
+
+/* con_init() - initialise console					*/
+/* -------------------------------------------------------------------- */
+void con_init() { }
+
+
+/* con_quit() - finalise console					*/
+/* -------------------------------------------------------------------- */
+void con_quit()
+{
+#ifdef CONVDU_ANSI
+if (isatty(fileno(stdout)) == 0) con_wrch(20);	/* Reset colours	*/
+#endif
 }

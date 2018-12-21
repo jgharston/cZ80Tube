@@ -1,12 +1,11 @@
-                     Z80Tube Emulator in C Version 0.27
+                     Z80Tube Emulator in C Version 0.26
                      ==================================
                            J.G.Harston and others
                      http://www.mdfs.net/Apps/Emulators/Tube
 
 UPDATES
 =======
-v0.25 07-Sep-2003
-v0.26 31-Aug-2004 DD:  OSWORD 127 disk image code and OSWORD 255.
-                  JGH: CPI/CPD/LDI/LDD sets P/V flags correctly. I/O memory
-                       declarations moved to main.c
-v0.27 01-Dec-2018 Updated console module, added null *FX command.
+v0.26 DD:  OSWORD 127 disk image code and OSWORD 255.
+      JGH: CPI/CPD/LDI/LDD sets P/V flags correctly. I/O memory
+      declarations moved to main.c
+v0.27 JGH: Various keyboard-related tidying up.

@@ -35,11 +35,11 @@ if (progtitle2[DATE_START+0] == ' ') progtitle2[DATE_START+0]='0';
 if((iomem=(int8 *)malloc(IOMSIZE)) == 0) exit(1);
 					/* Claim I/O memory		*/
 if((mem=(int8 *)malloc(65536+130)) == 0) exit(1);
-for (l=0; l<266; l++) mem[l]=mem0[l];	/* Initialise main memory	*/
 
-for(l=0; l<266; l++) {			/* Copy mini-mos to high memory */
-  mem[0xFF00+l]=mem[l+8];		/* and clear zero page		*/
-  mem[l+8]=0;				/* Jumps put in 0000-0007	*/
+for(l=0; l<266; l++) mem[l]=mem0[l];	/* Initialise main memory	*/
+for(l=0; l<266; l++) {
+  mem[0xFF00+l]=mem[l+8];		/* Copy mini-mos to high memory */
+  mem[l+8]=0;				/* and clear zero page		*/
   }
 mem[14]=0xE1; mem[15]=0xE9;		/* CALL 14 -> LD HL,PC		*/
 
@@ -48,10 +48,10 @@ PC=&mem[0]+0xFF03;			/* Prepared if nothing loaded	*/
 
 /* If started with no parameters, should really start silently with
    default MOS and default program, ie the equivalent of
-   z80 -mos Z80$MOS Z80$BASIC
+   z80 -mos Z80TUBE$MOS Z80TUBE$BASIC
  */
 
-if (argc == 1) proginfo();		/* No parameters, startup msg	*/
+/* if (argc == 1) proginfo();		/* No parameters, print intro	*/
 l=1;					/* Loop though parameters	*/
 while (l < argc) {
   if (argv[l][0] == '-') {
@@ -73,10 +73,10 @@ while (l < argc) {
       debug=argv[l][0];			/* Should really decode hex value */
       break;
     default:				/* All other options		*/
-      if (argv[l][1] == 'h') {		/* -help, print program info	*/
-	proginfo();
+      if (argv[l][1] == 'h' || argv[l][1] == '?') {
+      	proginfo();			/* -help, -?, print program info*/
 	}
-      printf("Usage: %s [-mos file] [file [params]]\n",argv[0]);
+      printf("Usage: %s [-debug num] [-mos file] [file [params]]\n",argv[0]);
       exit(0);
       break;
     }
@@ -96,6 +96,8 @@ if (l < argc) {				/* Copy any more parameters to	*/
 					/* Parameter buffer at 0x0080	*/
   for (m=0; (argv[l][m] != 0) && (m < 120); m++) mem[0x81+m]=argv[l][m];
   mem[0x80]=m;				/* Only copies one param atm	*/
+  } else {
+  proginfo();				/* No parameters, print intro	*/
   }
 
 /* Usage: z80 -mos <mos_file> program params				*

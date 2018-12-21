@@ -1,2 +1,5 @@
-hostio uses console.c for readline, so even if non-DOS, still needs console.c
-thoughts: update so #ifdef SDLavailable uses SDL assistance for keyscan
+Unix: turn Ctrl-Q,Ctrl-S off on input
+
+Need to do test builds with RISC OS and Unix to check not broken. - done
+
+Need to do test builds with Unix to get ioctl() calls working. - done

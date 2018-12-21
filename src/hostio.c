@@ -14,18 +14,20 @@
    28-May-1993 JGH: Added OSFILE/PUT/GET for bbc
    31-May-1993 JGH: MOS_QUIT moved to z80.c, PC made a pointer
                OSGBPB for __bbc written, but where is mem[HLreg+0] returned?
-   26-Jun-1993 JGH: *Basic load Z80Tube$Basic; *com checks Z80$Flag
+   26-Jun-1993 JGH: *Basic loads Z80Tube$Basic; *com checks Z80Tube$Flag
    12-Jun-1995 JGH: Note: could do following
                on startup, read ioctl, do "stty -cooked", read ioctl
                then use ioctl to change, and on shutdown, set back
    30-Aug-2003 JGH: Now called hostio.c
    23-Nov-2018 JGH: Added OSBYTE &86, cleaned up OSBYTE &81
+   17-Dec-2018 JGH: Added escanable, some work on signals
+   19-Dec-2018 JGH: tty settings working with new Linux calls
 */
 
 /* ==================================================================== */
 /* RISC OS kernel interface						*/
 /* ==================================================================== */
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
 #include <kernel.h>
 #include <swis.h>
 _kernel_oserror oserr;			/* Returned error information	*/
@@ -38,22 +40,31 @@ _kernel_swi_regs regs;			/* Used by OSWORD 0		*/
 /* ==================================================================== */
 /* UNIX kernel interface						*/
 /* ==================================================================== */
-#ifdef Z80_IO_UNIX
-#include <time.h>
+#ifdef Z80IO_UNIX
 #include <sys/ioctl.h>
-#ifndef __GNUC__
-struct tchars z80chars;
-struct sgttyb z80params;
+#include <termios.h>
+#include <unistd.h>
+#ifdef TCSAFLUSH
+  struct termios termhost;
+  struct termios termz80;
+#else
+  #ifdef TIOCGETC
+    struct tchars charshost;
+    struct tchars charsz80;
+    struct sgttyb termhost;
+    struct sgttyb termz80;
+  #endif
 #endif
+#include <time.h>
 #include "console.c"
 #endif
 
 /* ==================================================================== */
 /* Windows kernel interface						*/
 /* ==================================================================== */
-#ifdef Z80_IO_WIN
-#include <time.h>
+#ifdef Z80IO_WIN
 #include <windows.h>
+#include <time.h>
 /* #include <winbase.h> */
 #include "console.c"
 #endif
@@ -61,99 +72,197 @@ struct sgttyb z80params;
 /* ==================================================================== */
 /* DOS kernel interface							*/
 /* ==================================================================== */
-#ifdef Z80_IO_DOS
+#ifdef Z80IO_DOS
 #include <time.h>
 #include "console.c"
 #endif
 
+
 /* ==================================================================== */
-/* Escape handling							*/
-/* Needs tidying up							*/
+/* Escape and Break handling						*/
 /* ==================================================================== */
 #include <signal.h>
+int8 escenable=0;
+int8 escchar=27;
 
-void esc_pressed(int signal)		/* Escape key pressed		*/
+void keyint_pressed(int sig)		/* Keypress interupts		*/
 {
-signal=signal;				/* Prevent optiser removal	*/
-mem[0xFF80]=128;			/* Set z80's escape happened	*/
-esc_claim();				/* Reclaim signal		*/
+switch(sig) {
+  case SIGINT:				/* Escape or Ctrl-C pressed	*/
+#ifdef SIGBREAK
+  case SIGBREAK:			/* Ctrl-Break pressed		*/
+#endif
+    mem[0xFF80]=128;			/* Set Z80's escape flag	*/
+    signal(sig, keyint_pressed);	/* Re-attach signal		*/
+  }
 }
 
-esc_claim()				/* Claim SIGINT (escape) signal	*/
+void keyint_claim(void)			/* Claim keypress interupts	*/
 {
-signal(SIGINT, esc_pressed);
+signal(SIGINT, keyint_pressed);		/* Escape or Ctrl-C pressed	*/
+#ifdef SIGBREAK
+signal(SIGBREAK, keyint_pressed);	/* Ctrl-Pause/Break pressed	*/
+#endif
 }
 
-void esc_release(void)			/* Release SIGINT (escape)	*/
+void keyint_release(void)		/* Release keypress interupts	*/
 {
 signal(SIGINT, SIG_DFL);
-}
-
-void esc_on(void)			/* Turn SIGINT on for CHR$27	*/
-{
-#ifdef Z80_IO_UNIX
-#ifndef __GNUC__			/* To do: find out how to do this*/
-ioctl(stdin,TIOCGETC,&z80chars);
-z80chars.t_intrc=27;
-z80chars.t_quitc=-1;
-ioctl(stdin,TIOCSETC,&z80chars);
-#endif
+#ifdef SIGBREAK
+signal(SIGBREAK, SIG_DFL);
 #endif
 }
 
-void esc_off(void)			/* Turn SIGINT off */
+void esc_on(void)			/* Enable SIGINT for Escape	*/
 {
-#ifdef Z80_IO_UNIX
-#ifndef __GNUC__
-ioctl(stdin,TIOCGETC,&z80chars);
-z80chars.t_intrc=-1;
-z80chars.t_quitc=-1;
-ioctl(stdin,TIOCSETC,&z80chars);
+#ifdef Z80IO_UNIX
+  #ifdef TCSAFLUSH
+termz80.c_cc[VINTR]=escchar;		/* Interupt is enabled		*/
+tcsetattr(STDIN_FILENO, TCSAFLUSH, &termz80);
+  #endif
 #endif
+}
+
+void esc_off(void)			/* Disable SIGINT for Escape	*/
+{
+#ifdef Z80IO_UNIX
+  #ifdef TCSAFLUSH
+termz80.c_cc[VINTR]=0;			/* Interupt is disabled		*/
+tcsetattr(STDIN_FILENO, TCSAFLUSH, &termz80);
+  #endif
+#endif
+}
+
+#ifndef Z80IO_RO
+int esc_rdch(int tmp)
+{
+if (tmp) esc_off();			/* Allow con_rdch() to read Esc	*/
+tmp=con_rdch();
+esc_on();				/* Restore Esc as bgnd interupt	*/
+if (escenable == 0) {			/* If Escapes enabled		*/
+  if (escchar == tmp) mem[0xFF80]=128;	/*  and EscChar, set ESCFLG	*/
+  }
+return tmp;
+}
+#endif
+
+
+/* ==================================================================== */
+/* Text input/output handling						*/
+/* ==================================================================== */
+
+void tty_init(void)
+{
+#ifdef Z80IO_WIN
+  SetConsoleCtrlHandler(NULL, TRUE);	/* Ctrl-C is a normal character	*/
+#endif
+
+#ifdef Z80IO_UNIX
+  #ifdef TCSAFLUSH
+  /* Linux-style tty settings */
+  tcgetattr(STDIN_FILENO, &termhost);	/* Get host's tty settings	*/
+  #else
+    #ifdef TIOCGETP
+    /* Old-style unix ioctl() tty settings */
+    ioctl(stdout, TIOCGETP, &termhost);	/* Get host's tty settings	*/
+    ioctl(stdin, TIOCGETC, &charshost);	/* Get host's tty characters	*/
+    #endif
+  #endif
+#endif
+}
+
+/* Set text i/o to raw */
+void tty_raw(void)
+{
+#ifdef Z80IO_UNIX
+  #ifdef TCSAFLUSH
+  /* Linux-style tty settings */
+  tcgetattr(STDIN_FILENO, &termz80);	/* Get tty settings		*/
+  termz80.c_iflag &= ~ICRNL;		/* RETURN gives <cr>		*/
+  termz80.c_lflag &= ~(ECHO | ICANON);	/* Turn off ECHO, EDITOR	*/
+  termz80.c_cc[VINTR]=escchar;		/* Interupt is Escape		*/
+  termz80.c_cc[VSUSP]=0;		/* Suspend is disabled		*/
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &termz80);
+  #else
+    #ifdef TIOCGETP
+    /* Old-style unix ioctl() tty settings */
+    ioctl(stdout,TIOCGETP, &termz80);	/* Get again to modify them	*/
+    termz80.sg_flags=((termz80.sg_flags & !RAW & !ECHO) | CBREAK);
+					/* RAW, no ECHO, no EDITOR	*/
+    ioctl(stdout,TIOCSETP, &termz80);
+    ioctl(stdin,TIOCGETC, &charsz80);	/* Get tty characters		*/
+    charsz80.t_intrc=27;		/* Interupt is Escape		*/
+    charsz80.t_quitc=-1;		/* Suspend is disabled		*/
+    ioctl(stdin,TIOCSETC,&charsz80);
+    #endif
+  #endif
+#endif
+}
+
+/* Set text i/o for a call to host */
+void tty_host(void) {
+#ifdef Z80IO_UNIX
+  #ifdef TCSAFLUSH
+  /* Linux-style tty settings */
+  memcpy(&termz80, &termhost, sizeof(termhost));
+  termz80.c_cc[VINTR]=escchar;		/* Interupt is Escape		*/
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &termz80);
+  #else
+    #ifdef TIOCGETP
+    /* Old-style unix ioctrl() tty settings */
+    ioctl(stdout,TIOCSETP, &termhost);	/* Set host's tty settings	*/
+    memcpy(&charsz80, &charshost, sizeof(charshost));
+    charsz80.t_intrc=escchar;		/* Interupt is Escape		*/
+    ioctl(stdin,TIOCSETC,&charsz80);
+    #endif
+  #endif
+#endif
+}
+
+/* Restore text i/o to host's settings */
+void tty_quit(void)
+{
+#ifdef Z80IO_UNIX
+  #ifdef TCSAFLUSH
+  /* Linux-style tty settings */
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &termhost);
+  #else
+    #ifdef TIOCGETP
+    /* Old-style unix ioctrl() tty settings */
+    ioctl(stdin, TIOCSETP, &termhost);
+    ioctl(stdin, TIOCSETC, &charshost);
+    #endif
+  #endif
 #endif
 }
 
 
 /* ==================================================================== */
-/* Text output handling							*/
-/* Needs work								*/
+/* Startup and finalisation						*/
 /* ==================================================================== */
-
-/* Set output to 'semi-cooked' */
-void set_cbreak(void)
+void io_start(void)
 {
-#ifdef Z80_IO_UNIX
-/*
-system("stty cbreak -echo");  */     /* This REALLY should use ioctl() */
-
-#ifndef __GNUC__
-ioctl(stdout,TIOCGETP, &z80params);
-z80params.sg_flags=((z80params.sg_flags & !RAW & !ECHO) | CBREAK);
-ioctl(stdout,TIOCSETP, &z80params);
-ioctl(stdin, TIOCGETP, &z80params);
-z80params.sg_flags=((z80params.sg_flags & !RAW & !ECHO) | CBREAK);
-ioctl(stdin, TIOCSETP, &z80params);
+tty_init();				/* Initialise tty settings	*/
+tty_raw();				/* Set tty to raw		*/
+keyint_claim();				/* Trap keypress interupts	*/
+#ifndef Z80IO_RO
+con_init();				/* Initialise console		*/
 #endif
-#endif
+disk_init();				/* Mount default images		*/
 }
 
-/* Set output to cooked */
-void set_cooked(void)
+void io_finish(void)
 {
-#ifdef Z80_IO_UNIX
-/*
-system("stty -cbreak echo");  */  /* This also REALLY should use ioctl() */
-
-#ifndef __GNUC__
-ioctl(stdout,TIOCGETP, &z80params);
-z80params.sg_flags=((z80params.sg_flags & !RAW & !CBREAK) | ECHO);
-ioctl(stdout,TIOCSETP, &z80params);
-ioctl(stdin, TIOCGETP, &z80params);
-z80params.sg_flags=((z80params.sg_flags & !RAW & !CBREAK) | ECHO);
-ioctl(stdin, TIOCSETP, &z80params);
+disk_dismount(-1);			/* Close any open disk images	*/
+#ifndef Z80IO_RO
+con_quit();				/* Release console		*/
 #endif
-#endif
+keyint_release();			/* Release keypress interupts	*/
+tty_quit();				/* Restore to host's settings	*/
+free(mem);				/* Release Z80 memory		*/
+free(iomem);				/* Release I/O memory		*/
 }
+
 
 /* ==================================================================== */
 /* Various bits								*/
@@ -166,13 +275,13 @@ int get_hex(char c) {
 }
 
 
-/*
- * get_filetype - Returns the RISC OS file type of the named
- * file or -1 if file cannot be found or the name passed is
- * not that of a file
- */
+/* ============================================================ */
+/* get_filetype - Returns the RISC OS file type of the named	*/
+/* file or -1 if file cannot be found or the name passed is	*/
+/* not that of a file						*/
+/* ============================================================ */
 int get_filetype(char *name) {
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
   _kernel_swi_regs regs;
   _kernel_oserror *error;
   regs.r[0] = 23;		/* Use OS_File call 23 to read file details */
@@ -184,28 +293,6 @@ int get_filetype(char *name) {
   if (error != NULL || regs.r[0] != 1) return -1;
   return regs.r[6];		/* R6 = file's filetype */
 #endif
-}
-
-
-/* ==================================================================== */
-/* Startup and finalisation						*/
-/* ==================================================================== */
-void io_start(void)
-{
-esc_claim();				/* Trap escapes			*/
-esc_on();				/* Escape=CHR$27		*/
-/* Need to set to semi-cooked */
-disk_init();				/* Mount default images		*/
-}
-
-void io_finish(void)
-{
-esc_off();				/* Escape=?			*/
-esc_release();				/* Escape=CHR$3, release Escape */
-/* Need to set to cooked */
-disk_dismount(-1);			/* Close any open disk images	*/
-free(mem);				/* Release Z80 memory		*/
-free(iomem);				/* Release I/O memory		*/
 }
 
 
@@ -228,19 +315,17 @@ exit(0);				/* And exit			*/
 /* ==================================================================== */
 void MOS_CLI(void)
 {
-int type;				/* filetype			*/
-
 HLreg=Lreg | (Hreg << 8);		/* Point to string at HL	*/
 addr=0;
 for (addr=0; mem[HLreg]>31 && addr<250; HLreg++) iobuffer[addr++]=mem[HLreg];
 iobuffer[addr]=0;			/* Copy HL string to iobuffer	*/
 if (cli()) return;			/* Internal command		*/
 
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
 /* Check for a CPM-type command (filetype &2xx) */
-  type = get_filetype(&iobuffer[tmp]);
-  if (type >= 0x200 || type < 0x300) {
-    addr = (type & 0xFF) << 8;
+  tmp2 = get_filetype(&iobuffer[tmp]);
+  if (tmp2 >= 0x200 || tmp2 < 0x300) {
+    addr = (tmp2 & 0xFF) << 8;
     if (load(&iobuffer[tmp], addr) != -1) {
       PC = &mem[0] + addr; 
       return;
@@ -257,9 +342,9 @@ if(load(iobuffer+5,addr) != -1)
 	PC=&mem[0]+addr;		/* Execute loaded file		*/
 #endif
 
-#ifndef Z80_IO_RO
+tty_host();				/* Use host's tty settings	*/
 system(&iobuffer[0]);			/* Needs to check for errors	*/
-#endif
+tty_raw();				/* Restore back to raw tty	*/
 }
 
 
@@ -270,11 +355,12 @@ void MOS_BYTE(void)
 {
 if (debug & 2) printf("OSBYTE %02X,%02X%02X\n",Areg,Hreg,Lreg);
 
-tmp=Lreg + (Hreg<<8);			/* 16-bit value of HL		*/
+Freg=Freg & 254;			/* Clear Carry			*/
+tmp=(Hreg<<8)+Lreg;			/* 16-bit value of HL		*/
 switch (Areg) {
-#ifndef Z80_IO_RO
+#ifndef Z80IO_RO
   case 0:				/* Read host type		*/
-    Lreg=Z80_HOST;
+    Lreg=Z80HOST;
     return;
 #endif
 
@@ -287,35 +373,52 @@ switch (Areg) {
     mem[0xFF80]=128;			/* then drop though to tell OS	*/
     break;
 
-#ifndef Z80_IO_RO
+#ifndef Z80IO_RO
   case 0x7F:				/* Read EOF#handle		*/
-    Lreg=file_eof(Lreg);		/* Call file.c			*/
+    if (Lreg) Lreg=file_eof(Lreg);	/* Call file.c			*/
+    else      Lreg=(kbhit() ? 0 : 255);	/* IF NOT EOF#0 THEN keypending	*/
     return;
+
+  case 0x80:				/* ADVAL(port)			*/
+    switch (Lreg) {
+      case 0xFF:			/* IF ADVAL(-1) THEN keypending	*/
+        tmp=kbhit(); break;
+      case 16:				/* ADVAL(16) - 16-bit GET	*/
+        tmp=esc_rdch(1); break;
+    }
+    break;
 
   case 0x81:				/* INKEY			*/
     if (tmp == 0xFF00) {		/* INKEY-256			*/
-        Lreg=Z80_OS; Hreg=0;
+        Lreg=Z80OS; Hreg=0;
         return;
       }    
-    if (tmp >= 0xFE00) {		/* INKEY-ve			*/
+    if (tmp >= 0xF000) {		/* INKEY-ve			*/
       Hreg=(Lreg=(con_keyscan(tmp) ? 0xFF : 0x00));
       return;
       }
     					/* Read timed			*/
     tmp=clock()+(tmp & 0x7fff)*(CLOCKS_PER_SEC/100);
+    esc_off();				/* Allow kbhit() to detect Esc	*/
     for(;;) {				/* Wait for a key or timeout	*/
       if(kbhit() || (clock()>tmp)) break;
       }
-    if(kbhit()) tmp=con_rdch(); else tmp=0xffff;
-    Hreg=((Hreg & 0x80) ? tmp >> 8 : 0); /* &8000+n -> 16bit, n -> 8bit */
-    if (tmp == 0xffff) Hreg=0xff;	 /* -1 -> 0xffff		*/
-    if ((Lreg=tmp) == 27) mem[0xFF80]=128; /* Should check EscOn	*/
-    Freg=(Freg & 254) | ((mem[0xFF80] & 128) >> 7); /* Escape		*/
+    if(kbhit()) tmp=esc_rdch(0); else tmp=0xFFFF;
+    if (Hreg < 0x80) tmp=tmp & 0x00FF;	/* Not INKEY(&8000+n)		*/
+    Lreg=(int8)(tmp & 0xFF);		/* Character read		*/
+    Hreg=(int8)(tmp >> 8);		/* High byte of character or -1	*/
+    Freg=Freg | ((mem[0xFF80] & 128) >> 7);	/* Escape		*/
     return;
     
   case 0x86:				/* Read POS and VPOS		*/
-    con_getxy(&Lreg, &Hreg);
+    con_getxy(&tmp, &tmp2);
+    Lreg=(int8)tmp; Hreg=(int8)tmp2;
     return;
+    
+  case 0xE5:				/* Enable/disable Escape	*/
+    Lreg=escenable;			/* Return old state		*/
+    escenable=(int8)tmp;		/* Set new state		*/
+    return;    
 #endif
   
   case 0x82:				/* Read Hi Order Address	*/
@@ -331,13 +434,13 @@ switch (Areg) {
     return;
   }
 
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
 chk_err(tmp=_kernel_osbyte(Areg,Lreg,Hreg));
 #endif
 
 Lreg=tmp & 255;				/* Extract registers from tmp	*/
 Hreg=(tmp & 0xFF00) >> 8;
-Freg=(Freg & 254) | ((tmp & 65536) >> 16);
+Freg=Freg | ((tmp & 65536) >> 16);
 }
 
 
@@ -408,7 +511,7 @@ if (debug & 2) printf("OSWORD %02X,%04X\n",Areg,HLreg);
 
 switch (Areg) {
   case 0:				/* Read a line of input		*/
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
     regs.r[0]=addr+(int)&mem[0];	/* ARM address of input iobuffer */
     regs.r[1]=mem[HLreg+2];		/* iobuffer size		*/
     regs.r[2]=mem[HLreg+3];		/* min. ASCII			*/
@@ -418,14 +521,16 @@ switch (Areg) {
     Hreg=regs.r[1];			/* Returned length		*/
     if (oserr2 != NULL) z80error(oserr2->errnum, oserr2->errmess, "");
 #else
-    tmp=con_readln(addr, mem[HLreg+2], mem[HLreg+3], mem[HLreg+4]);
-    if (tmp < 0) { Freg=((Freg & 254) | 1); }
+    esc_off();				/* Escape processed by readln()	*/
+    tmp=con_readln((char *)addr, mem[HLreg+2], mem[HLreg+3], mem[HLreg+4]);
+    esc_on();				/* Escape is backgnd interupt	*/
+    Freg=Freg & 254;
+    if (tmp < 0) { Freg=Freg | 1; }
     else { Hreg=tmp; mem[addr+tmp]=13; }
 #endif
     return;
-    break;
 
-#ifndef Z80_IO_RO
+#ifndef Z80IO_RO
   case 1:				/* Read TIME			*/
     tmp=(int)clock()/(CLOCKS_PER_SEC/100);    
     mem[HLreg]=tmp;
@@ -434,18 +539,15 @@ switch (Areg) {
     mem[HLreg+3]=tmp >> 24;
     mem[HLreg+4]=0;
     return;
-    break;
 #endif
 
   case 5:				/* Read from memory		*/
     mem[HLreg+4]=*(char *)addr32;
     return;
-    break;
 
   case 6:				/* Write to memory		*/
     *(char *)addr32=mem[HLreg+4];
     return;
-    break;
 
   case 127:				/* FM direct disk I/O		*/
     osword_127();
@@ -455,34 +557,31 @@ switch (Areg) {
   case 190:				/* Disassembly routine		*/
     if (mem[HLreg+2] == 80) {		/* Z80 disassem routine		*/
       mem[HLreg+3]=1; mem[HLreg+4]='?'; mem[HLreg+5]=13;
-      return;
-    }
-    break;
+      }
+    return;
 
   case 191:				/* Assembly routine		*/
     return;
-    break;
 #endif
 
   case 200:				/* SWI Interface		*/
     MOS_FF0D();				/* Pass on to ED0D handler	*/
     return;
-    break;
 
   case 255:				/* I/O processor memory access */
     osword_255();
     return;
 
   default:				/* All other calls		*/
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
 /* NB: Some calls need to have addresses relocated */
     for(l=0; l<250 & HLreg+l < 0xFFFF; l++) iobuffer[l]=mem[HLreg+l];
     chk_err(_kernel_osword(Areg, (int *)iobuffer));
     for(l=0; l<250 & HLreg+l < 0xFFFF; l++) mem[HLreg+l]=iobuffer[l];
 #endif
     return;
-    break;
   }
+return;
 }
 
 
@@ -491,7 +590,7 @@ switch (Areg) {
 /* ==================================================================== */
 void MOS_WRCH(void)
 {
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
 chk_err(_kernel_oswrch(Areg));
 #else
 con_wrch(Areg);
@@ -504,31 +603,35 @@ con_wrch(Areg);
 /* ==================================================================== */
 void MOS_RDCH(void)
 {
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
 chk_err(tmp=_kernel_osrdch());
 #else
-/* If not RISC OS:
-   Escape trapped and causes FF80 to be set
-   Escape=CHR$27
-   Does Escape cause getch() to return?
-*/
-tmp=con_rdch();
+tmp=esc_rdch(1);			/* Read char, including Escape	*/
 #endif
 Areg=tmp & 0xFF;
-/* if (escape enabled)	/* CHR$27 should only set ESCFLG if enabled	*/
-   if (Areg == 27) mem[0xFF80]=128;		/* Set local ESCFLG	*/
-
-Freg=(Freg & 254) | ((mem[0xFF80] & 128) >> 7);	/* Escape		*/
+Freg=(Freg & 254) | ((mem[0xFF80] & 128) >> 7);	/* Cy set from ESCFLG	*/
 }
 
 
 /* Adjust address of &0000xxxx to point to real memory */
+/* To do: also support &FFFFxxxx for iomem CP/M buffer */
 void adjustaddr(int *n, int *m)
 {
-#ifdef Z80_IO_RO
-if ((*n & 0xFFFF0000) == 0) {
+#ifdef Z80IO_RO
+if ((*n & 0xFFFF0000) == 0x00000000) {	/* Z80 main memory		*/
   *n=*n+(int)&mem[0];
   if (m != 0) *m=*m+(int)&mem[0];
+  return;
+  }
+
+if ((*n & 0xFFFF0000) == 0xFFFF0000) {	/* CP/M buffer in I/O memory	*/
+  *n=*n & 0x0FFF;
+  *n=*n+(int)&iomem[0];
+  if (m != 0) {
+    *m=*m & 0x0FFF;
+    *m=*m+(int)&iomem[0];
+    }
+  return;
   }
 #endif
 }
@@ -537,7 +640,7 @@ if ((*n & 0xFFFF0000) == 0) {
 /* Check addresses before doing OSFILE */
 void check_addresses()
 {
-#ifdef Z80_IO_RO
+#ifdef Z80IO_RO
 /*  2345 6789 ABCD EF01
     load exec leng attr
 R0   R2   R3   R4   R5
@@ -571,7 +674,7 @@ if (Areg == 255 || Areg == 12 || Areg == 14 || Areg == 16)
 /* ==================================================================== */
 void MOS_FILE(void)
 {
-#ifndef Z80_FILE_RO
+#ifndef Z80FILE_RO
 int loadL,execL,startL,endL;
 int loadH,execH,startH,endH;
 #endif
@@ -580,7 +683,7 @@ HLreg=Lreg | (Hreg << 8);
 addr=mem[HLreg] | (mem[HLreg+1] << 8);
 io_filename(addr);			/* Copy filename to iobuffer	*/
 
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
 ctrl.load =mem[HLreg+ 2]+(mem[HLreg+ 3] << 8)+(mem[HLreg+ 4] << 16)+(mem[HLreg+ 5] << 24);
 ctrl.exec =mem[HLreg+ 6]+(mem[HLreg+ 7] << 8)+(mem[HLreg+ 8] << 16)+(mem[HLreg+ 9] << 24);
 ctrl.start=mem[HLreg+10]+(mem[HLreg+11] << 8)+(mem[HLreg+12] << 16)+(mem[HLreg+13] << 24);
@@ -609,7 +712,7 @@ mem[HLreg+16]=ctrl.end >> 16;
 mem[HLreg+17]=ctrl.end >> 24;
 #endif
 
-#ifndef Z80_FILE_RO
+#ifndef Z80FILE_RO
 loadL =mem[HLreg+2] +(mem[HLreg+3]<<8);  loadH =mem[HLreg+4] +(mem[HLreg+5]<<8);
 execL =mem[HLreg+6] +(mem[HLreg+7]<<8);  execH =mem[HLreg+8] +(mem[HLreg+9]<<8);
 startL=mem[HLreg+10]+(mem[HLreg+11]<<8); startH=mem[HLreg+12]+(mem[HLreg+13]<<8);
@@ -662,7 +765,7 @@ switch(Areg) {
 void MOS_ARGS(void)
 {           
 HLreg=Lreg | (Hreg << 8);
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
 chk_err(tmp=_kernel_osargs(Areg,Ereg,mem[HLreg]+(mem[HLreg+1] << 8)+(mem[HLreg+2] << 16)+(mem[HLreg+3] << 24)));
 if ((Areg == 0) && (Ereg == 0)) {
   Areg=tmp;
@@ -675,13 +778,13 @@ if ((Areg == 0) && (Ereg == 0)) {
   }
 #endif
 if ((Areg == 0) && (Ereg == 0)) {
-#ifdef Z80_FILE_UNIX
+#ifdef Z80FILE_UNIX
   Areg=24;			/* UNIXFS				*/
 #endif
-#ifdef Z80_FILE_DOS
+#ifdef Z80FILE_DOS
   Areg=29;			/* DOSFS				*/
 #endif
-#ifdef Z80_FILE_WIN
+#ifdef Z80FILE_WIN
   Areg=29;			/* DOSFS				*/
 #endif
   }
@@ -693,7 +796,7 @@ if ((Areg == 0) && (Ereg == 0)) {
 /* ==================================================================== */
 void MOS_BGET(void)
 {
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
 chk_err(Areg=_kernel_osbget(Hreg));
 #endif
 Freg=(Freg & 254) | ((Areg & 256) >> 8);
@@ -705,7 +808,7 @@ Freg=(Freg & 254) | ((Areg & 256) >> 8);
 /* ==================================================================== */
 void MOS_BPUT(void)
 {
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
 chk_err(_kernel_osbput(Areg,Hreg));
 #endif
 }
@@ -720,7 +823,7 @@ int flag=0;
 
 HLreg=Lreg | (Hreg << 8);
 
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
   gbpb.dataptr =(void *)(mem[HLreg+1] | (mem[HLreg+2] << 8) | (mem[HLreg+3] << 16) | (mem[HLreg+4] << 24));
   gbpb.nbytes  =mem[HLreg+5] | (mem[HLreg+ 6] << 8) | (mem[HLreg+ 7] << 16) | (mem[HLreg+ 8] << 24);
   gbpb.fileptr =mem[HLreg+9] | (mem[HLreg+10] << 8) | (mem[HLreg+11] << 16) | (mem[HLreg+12] << 24);
@@ -758,14 +861,14 @@ void MOS_FIND(void)
 {
 if (Areg != 0) {
   io_filename(Lreg | (Hreg << 8));	/* copy name to iobuffer	*/
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
   chk_err(tmp=_kernel_osfind(Areg,iobuffer));		/* Open file	*/
 #else
   tmp=0;
 #endif
   Areg=tmp;
   } else {
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
   chk_err(tmp=_kernel_osfind(Areg,(char *)Hreg));	/* Close file	*/
 #endif
   }
@@ -782,18 +885,18 @@ int flags;
 switch(Areg) {
 
 case 0:					/* Start Basic			*/
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
   if(load("<Z80Tube$Basic>",0x0100) != -1) PC=&mem[0]+0x0100;
 #endif
-#ifdef Z80_FILE_UNIX
+#ifdef Z80FILE_UNIX
   if(load("Z80Tube$BASIC",0x0100) != -1) PC=&mem[0]+0x0100;
 #endif
-#ifdef Z80_FILE_DOS
+#ifdef Z80FILE_DOS
 /*  if (GetEnvironmentVariable("Z80TUBE$BASIC",iobuffer,254) != 0) {
     if(load(iobuffer,0x0100) != -1) PC=&mem[0]+0x0100;
     } */
 #endif
-#ifdef Z80_FILE_WIN
+#ifdef Z80FILE_WIN
   if (GetEnvironmentVariable("Z80TUBE$BASIC",iobuffer,254) != 0) {
     if(load(iobuffer,0x0100) != -1) PC=&mem[0]+0x0100;
     }
@@ -901,7 +1004,7 @@ return(l);				/* Returns length		*/
 /* Error handling							*/
 /* ==================================================================== */
 
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
 /* Check if an error occured after calling RISC OS kernel		*/
 int chk_err(int retval)
 {

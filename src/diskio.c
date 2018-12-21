@@ -138,7 +138,7 @@ int disk_show(void) {
   for (n = 0; n < MAX_DRIVES; n++) {
     if (disks[n].diskfile != 0) {
       count++;
-      printf("Drive %d (%c:)  Disk image = '%s'\n", n, n + 'A', disks[n].diskfile);
+      printf("Drive %d (%c:) Disk image = '%s'\n", n, n + 'A', disks[n].diskfile);
     }
   }
   if (count == 0) {
@@ -247,7 +247,7 @@ void disk_init(void) {
   int n, rc;
   char drivevar[20], file[256];
 
-#ifdef Z80_FILE_RO
+#ifdef Z80FILE_RO
   for (n = 0; n < MAX_DRIVES; n++) disks[n].diskfile = 0;
   for (n = 0; n < MAX_DRIVES; n++) {
     sprintf(drivevar, "Z80Tube$Drive%d", n);
@@ -383,7 +383,7 @@ int cli_mount(void) {
   char *p;
   int drive, rc;
 
-  p = &iobuffer[l_ptr];		/* p->command parameters		*/
+  p = &iobuffer[lptr];		/* p->command parameters		*/
   if (*p < ' ') return 0;	/* Bad syntax, pass to external		*/
   if (!isdigit(*p)) return 0;	/* Bad syntax, pass to external		*/
   drive = (int) strtol(p, &p, 10);
@@ -416,7 +416,7 @@ int cli_dismount(void) {
   char *p;
   int drive, rc;
 
-  p = &iobuffer[l_ptr];		/* p->command parameters		*/
+  p = &iobuffer[lptr];		/* p->command parameters		*/
   if (*p < ' ') return 0;	/* Bad syntax, pass to external		*/
   if (!isdigit(*p)) return 0;	/* Bad syntax, pass to external		*/
   drive = (int) strtol(p, &p, 10);

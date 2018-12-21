@@ -29,7 +29,7 @@
 /* z80 engine variables and memory defined in memory.c */
 
 /* Title message */
-char progtitle1[]="Z80Tube Emulator (C Code) Version 0.27\n\x00";
+char progtitle1[]="Z80Tube Emulator (" Z80TARGET ") Version 0.27\n\x00";
 char progtitle2[]="Compiled on "__DATE__" at "__TIME__"\n\x00";
 #define DATE_START 12
 

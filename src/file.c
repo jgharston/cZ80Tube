@@ -78,10 +78,14 @@ int add_ext(char *l, char *ext)
 int m=0;
 
 while(ext[m]) *l++=ext[m++];
-return 0;				/* Avoids Norcroft warning msg */
+return 0;			/* Avoids Norcroft warning	*/
 }
 
+/* ============================================================ */
+/* Test end of file of open channel				*/
+/* ============================================================ */
 int file_eof(int a)
 {
 return(0);
 }
+
