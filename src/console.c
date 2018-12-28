@@ -147,10 +147,12 @@ if (vduqlen) {
 switch (c) {
 #ifdef CONVDU_ANSI
   case 9:   fputs("\x1B[C",stdout); break;	/* Move right	*/
-  case 11:  fputs("\x1B[A",stdout); break;	/* Move upwards	*/
+  case 10:  fputs("\x1B[B",stdout); break;	/* Move down	*/
+  case 11:  fputs("\x1B[A",stdout); break;	/* Move up	*/
 #else
   case 9:   gotoxy(wherex()+1,wherey()); break;	/* Move right	*/
-  case 11:  gotoxy(wherex(),wherey()-1); break;	/* Move upwards	*/
+  case 10:  gotoxy(wherex(),wherey()+1); break;	/* Move down	*/
+  case 11:  gotoxy(wherex(),wherey()-1); break;	/* Move up	*/
 #endif
   case 12:  clrscr(); break;			/* CLS		*/
   case 17:  vduq[0]=c; vduqlen=1; break;	/* COLOUR	*/

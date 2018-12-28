@@ -357,7 +357,6 @@ KBDTest    Display keyboard keypress values.
 KeyScan    Display keyscan values.
 KeyTest    Graphically display keyscan values.
 MOS        Default MOS interface code.
-ScanTest   Display 16bit keypress values.
 
 
 Version History

@@ -313,38 +313,47 @@ exit(0);				/* And exit			*/
 /* ==================================================================== */
 /* OSCLI - Execute an command						*/
 /* ==================================================================== */
+extern int lptr;
 void MOS_CLI(void)
 {
 HLreg=Lreg | (Hreg << 8);		/* Point to string at HL	*/
 addr=0;
 for (addr=0; mem[HLreg]>31 && addr<250; HLreg++) iobuffer[addr++]=mem[HLreg];
 iobuffer[addr]=0;			/* Copy HL string to iobuffer	*/
-if (cli()) return;			/* Internal command		*/
+lptr=0;
+while (iobuffer[lptr]==' ' || iobuffer[lptr]=='*') lptr++;
+					/* Skip leading spaces and '*'s	*/
+if (cli()) return;		        /* Internal command		*/
 
-#ifdef Z80IO_RO
+#ifdef Z80FILE_RO
 /* Check for a CPM-type command (filetype &2xx) */
-  tmp2 = get_filetype(&iobuffer[tmp]);
+  tmp2 = get_filetype(&iobuffer[lptr]);
   if (tmp2 >= 0x200 || tmp2 < 0x300) {
     addr = (tmp2 & 0xFF) << 8;
-    if (load(&iobuffer[tmp], addr) != -1) {
-      PC = &mem[0] + addr; 
+    if (load(&iobuffer[lptr], addr) != -1) {
+      PC = &mem[0] + addr;
       return;
     }
   }
 _kernel_oscli("Unset Z80Tube$Flag");
-if(chk_err(_kernel_system(&iobuffer[tmp],0)))
+if (chk_err(_kernel_system(&iobuffer[lptr],0)))
 	return;				/* Error occured, return	*/
-_kernel_getenv("Z80Tube$Flag", iobuffer, 250);
-if(iobuffer[0] == 0) return;		/* Command completed externally */
+tmp=(int)_kernel_getenv("Z80Tube$Flag", iobuffer, 250);
+if (tmp!=0 || iobuffer[0]==0) return;	/* Command completed externally */
 addr=(get_hex(iobuffer[0]) << 12) | (get_hex(iobuffer[1]) << 8);
 					/* Get address of file to load	*/
-if(load(iobuffer+5,addr) != -1)
+if (load(iobuffer+5,addr) != -1)
 	PC=&mem[0]+addr;		/* Execute loaded file		*/
-#endif
+#else
 
+if (iobuffer[lptr]=='/') {		/* /name becomes name		*/
+  lptr++;
+  while (iobuffer[lptr]==' ') lptr++;
+  }
 tty_host();				/* Use host's tty settings	*/
-system(&iobuffer[0]);			/* Needs to check for errors	*/
+system(&iobuffer[lptr]);		/* Needs to check for errors	*/
 tty_raw();				/* Restore back to raw tty	*/
+#endif
 }
 
 
@@ -400,10 +409,17 @@ switch (Areg) {
     					/* Read timed			*/
     tmp=clock()+(tmp & 0x7fff)*(CLOCKS_PER_SEC/100);
     esc_off();				/* Allow kbhit() to detect Esc	*/
-    for(;;) {				/* Wait for a key or timeout	*/
-      if(kbhit() || (clock()>tmp)) break;
+    for (;;) {				/* Wait for a key or timeout	*/
+      if ((tmp2=kbhit()) || (clock()>tmp)) break;
       }
-    if(kbhit()) tmp=esc_rdch(0); else tmp=0xFFFF;
+    if (tmp2) {
+      tmp=esc_rdch(0);			/* Get keypress			*/
+      } else {
+      tmp=0xFFFF; esc_on();		/* No keypress			*/
+#ifdef Z80IO_UNIX
+      fflush(stdout);
+#endif
+      }
     if (Hreg < 0x80) tmp=tmp & 0x00FF;	/* Not INKEY(&8000+n)		*/
     Lreg=(int8)(tmp & 0xFF);		/* Character read		*/
     Hreg=(int8)(tmp >> 8);		/* High byte of character or -1	*/

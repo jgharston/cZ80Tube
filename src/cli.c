@@ -7,17 +7,19 @@
  DaveDan: 31-Jul-2004 MOUNT/etc for disk images
  JGH:     04-Dec-2018 *CD <dir>, *SHOW changed to *MOUNTS
  JGH:     17-Dec-2018 *FX parses and passes to OSBYTE
+ JGH:     21-Dec-2018 Generalised command parser called by *HELP
 
 /* ==================================================================== */
 
 extern char progtitle1[];
 
 #ifdef Z80FILE_RO
-char cli_cmd[]="CAT\0BASIC\0DIR\0DISMOUNT\0FX\0HELP\0MOUNT\0MOUNTS\0QUIT\0CORE\0\0";
+char cli_cmd[]="BASIC\0DIR\0DISMOUNT\0FX\0HELP\0MOUNT\0MOUNTS\0QUIT\0CORE\0\0";
+char cli_txt[]="\0  <dir>\0<drv>\0   <a>(,<x>(,<y>))\0 (<subject>)\0<drv> <afsp>\0\0\0\0";
 #else
-char cli_cmd[]="CAT\0BASIC\0CD\0DISMOUNT\0FX\0HELP\0MOUNT\0MOUNTS\0QUIT\0CORE\0\0";
+char cli_cmd[]="BASIC\0CD\0DISMOUNT\0FX\0HELP\0MOUNT\0MOUNTS\0QUIT\0CORE\0\0";
+char cli_txt[]="\0   <dir>\0<drv>\0   <a>(,<x>(,<y>))\0 (<subject>)\0<drv> <afsp>\0\0\0\0";
 #endif
-char cli_txt[]="(<dir>)\0\0<dir>\0<drv>\0<a>(,<x>(,<y>))\0(<subject>)\0<drv> <afsp>\0\0\0\0";
 int tptr;
 int lptr;
 
@@ -57,11 +59,47 @@ while (*command == ' ') command++;		/* Skip spaces		*/
 return num;
 }
 
+/* ==================================================================== */
+/* cli_match(char *cmdtable)
+ * Search a command table for a match
+ * On entry: pointer to command table
+ *           global lptr points to start of command string
+ * On exit:  0 or command number
+ *           global lptr updated to point to after command
+/* ==================================================================== */
+int cli_match(char *cmdtable)
+{
+int num=0;
+int found=0;
+int start=0;
+
+start=lptr;				/* Start of command line	*/
+tptr=0;					/* Index into table command	*/
+
+while (cmdtable[tptr]) {		/* Stop when pointing to a zero	*/
+  num++;				/* Entry number			*/
+  for (lptr=start;
+      ((iobuffer[lptr] == cmdtable[tptr]) ||
+      ((iobuffer[lptr] ^ 0x20 )== cmdtable[tptr])) &&
+      cmdtable[tptr];
+      lptr++)
+    tptr++;
+  found=((cmdtable[tptr] == '\0' && iobuffer[lptr] < 'A')
+       || iobuffer[lptr] == '.');	/* Remember if we match		*/
+  if (iobuffer[lptr] == '.') lptr++;	/* Move past a '.'		*/
+  while (cmdtable[tptr]) tptr++;	/* Move to next zero byte	*/
+  if (!found) tptr++;			/* Move to next entry		*/
+  }					/* Not at end zero, check more	*/
+if (found) return num;
+lptr=start;				/* Restore lptr			*/
+return 0;
+}
+
 
 /* ==================================================================== */
 /* Inbuilt command routines						*/
 /* ==================================================================== */
-int cli_cat()				/* *CAT (<dir>)			*/
+int cli_cat()				/* *. (<dir>) (CAT passed to OS)*/
 {
 #ifdef Z80FILE_UNIX
 tty_host();
@@ -127,13 +165,11 @@ MOS_BYTE();
 return 1;					/* Claim command	*/
 }
 
+char help_cmd[]="Z80TUBE\0HOST\0\0";
 int cli_help()				/* *HELP (<topic>)		*/
 {
 printf("\n%s",progtitle1);
-if(   (iobuffer[lptr] == '.') ||
-     ((iobuffer[lptr] & 0xDF) == 'Z') ||
-    (((iobuffer[lptr] & 0xDF) == 'H')  &&  ((iobuffer[lptr+1] & 0xDF) == 'O'))
-  ) {
+if (cli_match(help_cmd)) {
   lptr=0; tptr=0;
   while(cli_cmd[tptr]) {
     putchar(32); putchar(32);
@@ -148,9 +184,9 @@ if(   (iobuffer[lptr] == '.') ||
   return(1);				/* Internal HELP done		*/
   }
 #ifdef Z80IO_RO
-return(0);				/* Pass to OS			*/
+return 0;				/* Pass to OS			*/
 #else
-return(1);				/* HELP done			*/
+return 1;				/* HELP done			*/
 #endif
 }
 
@@ -181,48 +217,39 @@ return(1);
 
 int cli()
 {
-int l_start=0;
 int num=0;
-int found=0;
+int optr;
 
+optr=lptr;
 tptr=0;
-lptr=0;
-tmp=0;					/* Initialise to 'claimed'	*/
-					/* Skip spaces and '*'s		*/
-while(iobuffer[l_start] == 32 || iobuffer[l_start] == '*') l_start++;
+if (iobuffer[lptr] == '.') {	/* *. - catalog				*/
+  lptr++;
+  lptr=skp_spc(lptr);
+  cli_cat();
+  return 1;
+  }
+num=cli_match(cli_cmd);		/* Match against command table		*/
+if (num==0) return 0;		/* Speedily leave here if not for us	*/
 
-while(cli_cmd[tptr]) {			/* Stop when pointing to a zero	*/
-  num++;				/* Entry number			*/
-  for(lptr=l_start;
-      (iobuffer[lptr] & 0xDF) == cli_cmd[tptr] && cli_cmd[tptr];
-      lptr++)
-    tptr++;
-  found=((cli_cmd[tptr] == '\0' && iobuffer[lptr] < 'A')
-       || iobuffer[lptr] == '.');	/* Remember if we match		*/
-  if(iobuffer[lptr] == '.') lptr++;	/* Move past a '.'		*/
-  while(cli_cmd[tptr]) tptr++;		/* Move to next zero byte	*/
-  if(!found) tptr++;			/* Move to next entry		*/
-  }				/* If not at end zero, go round for more */
-if(!found) return(0);		/* Speedily leave here if not for us	*/
 /* We now are pointing to the character after the end of the command.
    IE: HELP     or H.  or LO.
            ^         ^       ^						*/
-lptr=skp_spc(lptr);			/* Skip spaces			*/
 
+lptr=skp_spc(lptr);			/* Skip spaces			*/
 switch (num) {				/* Execute internal command	*/
-  case 1:  tmp=cli_cat();	break;
-  case 2:  tmp=cli_basic();	break;
-  case 3:  tmp=cli_cd();	break;
-  case 4:  tmp=cli_dismount();	break;	/* diskio.c			*/
-  case 5:  tmp=cli_fx();	break;
-  case 6:  tmp=cli_help();	break;
-  case 7:  tmp=cli_mount();	break;	/* diskio.c			*/
-  case 8:  tmp=cli_mounts();	break;	/* diskio.c			*/
-  case 9:  tmp=cli_quit();	break;
-  case 10: tmp=cli_core();	break;
+  case 1: tmp=cli_basic(); break;
+  case 2: tmp=cli_cd(); break;
+  case 3: tmp=cli_dismount(); break;	/* diskio.c			*/
+  case 4: tmp=cli_fx(); break;
+  case 5: tmp=cli_help(); break;
+  case 6: tmp=cli_mount(); break;	/* diskio.c			*/
+  case 7: tmp=cli_mounts(); break;	/* diskio.c			*/
+  case 8: tmp=cli_quit(); break;
+  case 9: tmp=cli_core(); break;
 }
 
 /* (*cli_code[num])();  Grrr - Can't get syntax working right */
-return(tmp);				/* Return claimed/unclaimed	*/
+lptr=optr;				/* Restore lptr			*/
+return tmp;				/* Return unclaimed		*/
 }
 

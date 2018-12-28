@@ -3,3 +3,6 @@ Unix: turn Ctrl-Q,Ctrl-S off on input
 Need to do test builds with RISC OS and Unix to check not broken. - done
 
 Need to do test builds with Unix to get ioctl() calls working. - done
+
+Z80 MOS shouldn't have 'CAT' in command table - done
+

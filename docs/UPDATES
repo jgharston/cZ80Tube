@@ -1,11 +1,19 @@
-                     Z80Tube Emulator in C Version 0.26
+                     Z80Tube Emulator in C Version 0.27
                      ==================================
                            J.G.Harston and others
-                     http://www.mdfs.net/Apps/Emulators/Tube
+                     http://mdfs.net/Apps/Emulators/Tube
 
 UPDATES
 =======
 v0.26 DD:  OSWORD 127 disk image code and OSWORD 255.
       JGH: CPI/CPD/LDI/LDD sets P/V flags correctly. I/O memory
       declarations moved to main.c
-v0.27 JGH: Various keyboard-related tidying up.
+
+v0.27 04-Dec-2018 *CD <dir>, *SHOW changed to *MOUNTS
+      *FX parses and passes to OSBYTE, generalised command parser
+      called by *HELP.
+      console.c updated, filled in and corrected JP keys, added
+      ANSI input and output.
+      *SHOW changed to *MOUNTS, *MOUNT <one parameter> passed on.
+      hostio.c added OSBYTE &80, &86, cleaned up OSBYTE &81.
+      tty settings working with new Linux calls.
