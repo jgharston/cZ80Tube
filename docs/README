@@ -2,7 +2,7 @@
                      ==================================
                      J.G.Harston - http://www.mdfs.net/
                  70 Camm Street, Walkley, Sheffield, S6 3TR
-                             Date: 21-Dec-2018
+                             Date: 31-Dec-2018
 
 
 cZ80Tube emulates a Z80 coprocessor, written in C. On running, various
@@ -365,5 +365,5 @@ v0.25 07-Sep-2003
 v0.26 31-Aug-2004 Dave Daniels added OSWORD &7F and OSWORD &FF for CPM support.
                   CPI/CPD/LDI/LDD sets P/V flags correctly. I/O memory
                   declarations moved to main.c
-v0.27 20-Dec-2018 Updated console module, supports ANSI i/o, added *FX command,
-                  updated unix tty control.
+v0.27 31-Dec-2018 Updated console module, supports ANSI I/O, added *FX command,
+                  updated unix and DOS tty control.

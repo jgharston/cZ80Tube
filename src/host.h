@@ -72,6 +72,7 @@
 
 
 #if defined(__unix__) || defined(__linux__)
+#ifndef __DOS__
 #define Z80IO_UNIX
 #define Z80FILE_UNIX
 #define Z80HOST	  HOST_UNIX
@@ -85,6 +86,7 @@
 #define Z80TARGET Z80UNIX "/GCC"
 #else
 #define Z80UNIX Z80UNIX
+#endif
 #endif
 #endif
 

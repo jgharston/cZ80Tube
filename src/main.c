@@ -13,7 +13,7 @@ void proginfo(void)			/* Print program information	*/
    Compiled on 25 Apr 2003 at 12:22:32
    Copyright (C)1987-2003 J.G.Harston
  */
-printf("%s%sCopyright (C)1987-2018 J.G.Harston\n\n",progtitle1,progtitle2);
+printf("%s\n\r%s\n\rCopyright (C)1987-2018 J.G.Harston\n\r\n",progtitle1,progtitle2);
 }
 
 main(argc,argv)

@@ -1,8 +1,17 @@
-Unix: turn Ctrl-Q,Ctrl-S off on input
+calibration in INKEY(timed) needs rewriting to get better accuracy.
+100/93 = 1.07, but becomes 1.
+1000/100 = 10, ok
+
+Unix/ANSI needs getxy().
+
+VDU 10 fails on bottom line of window - fixed, needed raw NL in ioct().
+
+Unix: turn Ctrl-Q,Ctrl-S off on input - done
 
 Need to do test builds with RISC OS and Unix to check not broken. - done
 
 Need to do test builds with Unix to get ioctl() calls working. - done
 
-Z80 MOS shouldn't have 'CAT' in command table - done
+Z80 MOS shouldn't have 'CAT' in command table. - done
 
+Update MEDIT to allow cursor keys &Cx as well as &8x. - change AND 127 to AND 11

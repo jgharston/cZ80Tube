@@ -102,16 +102,12 @@ return 0;
 int cli_cat()				/* *. (<dir>) (CAT passed to OS)*/
 {
 #ifdef Z80FILE_UNIX
-tty_host();
-system("ls");				/* Do an ls command		*/
-tty_raw();
-return(1);				/* Done it			*/
+tty_host(); system("ls");		/* Do an ls command		*/
+tty_raw(); return(1);			/* Done it			*/
 #endif
-#ifdef Z80FILE_WIN
-tty_host();
-system("dir /w");			/* Do a dir command		*/
-tty_raw();
-return(1);				/* Done it			*/
+#if defined(Z80FILE_WIN) | defined(Z80FILE_DOS)
+tty_host(); system("dir /w");		/* Do a dir command		*/
+tty_raw(); return(1);			/* Done it			*/
 #endif
 return(0);				/* Don't claim it, pass to OS	*/
 }
@@ -168,7 +164,7 @@ return 1;					/* Claim command	*/
 char help_cmd[]="Z80TUBE\0HOST\0\0";
 int cli_help()				/* *HELP (<topic>)		*/
 {
-printf("\n%s",progtitle1);
+printf("\n\r%s\n\r",progtitle1);
 if (cli_match(help_cmd)) {
   lptr=0; tptr=0;
   while(cli_cmd[tptr]) {
@@ -178,7 +174,7 @@ if (cli_match(help_cmd)) {
       putchar(32);
       while(cli_txt[lptr]) putchar(cli_txt[lptr++]);
       }
-    printf("\n");
+    printf("\n\r");
     lptr++; tptr++;
     }
   return(1);				/* Internal HELP done		*/

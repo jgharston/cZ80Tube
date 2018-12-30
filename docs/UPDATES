@@ -9,11 +9,11 @@ v0.26 DD:  OSWORD 127 disk image code and OSWORD 255.
       JGH: CPI/CPD/LDI/LDD sets P/V flags correctly. I/O memory
       declarations moved to main.c
 
-v0.27 04-Dec-2018 *CD <dir>, *SHOW changed to *MOUNTS
+v0.27 31-Dec-2018 *CD <dir>, *SHOW changed to *MOUNTS
       *FX parses and passes to OSBYTE, generalised command parser
       called by *HELP.
       console.c updated, filled in and corrected JP keys, added
-      ANSI input and output.
+      ANSI input and output, DOS tty control.
       *SHOW changed to *MOUNTS, *MOUNT <one parameter> passed on.
       hostio.c added OSBYTE &80, &86, cleaned up OSBYTE &81.
-      tty settings working with new Linux calls.
+      tty settings working with new Linux calls, DOS tty working.

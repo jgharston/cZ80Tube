@@ -2,14 +2,14 @@
 @rem Edit DJGPP and PATH paths to match your installation
 @rem NOT WORKING - gcc gives SIGSECV: Stack Overflow
 
+@cd %0\..\..\src
 @set DJGPP=C:\Apps\Programming\djgpp\djgpp.env
 @set PATH=C:\Apps\Programming\djgpp\bin;%PATH%
-@cd %0\..\..\src
-@gcc z80tube.c -o z80tube.exe -D__DOS__ -DUSECONIO
-@rem mkdir ..\binaries >NUL: 2>NUL:
-@rem if exist z80tube.exe copy z80tube.exe ..\binaries\cZ80djpp.exe >NUL:
-@rem if exist z80tube.exe del z80tube.exe
-@rem if exist z80tube.obj del z80tube.obj
+@gcc z80tube.c -o z80tube.exe -w -s -D__DOS__ -DUSECONIO
+@mkdir ..\binaries >NUL: 2>NUL:
+@if exist z80tube.exe copy z80tube.exe ..\binaries\cZ80djp.exe >NUL:
+@if exist z80tube.exe del z80tube.exe
+@if exist z80tube.obj del z80tube.obj
 @cd ..\build
 @pause
 

@@ -3,7 +3,7 @@
                            J.G.Harston and others
                         http://mdfs.net/System/C/Lib
                  70 Camm Street, Walkley, Sheffield, S6 3TR
-                      Version 0.13 - Date: 20-Dec-2018
+                      Version 0.14 - Date: 31-Dec-2018
 
 
 This Windows console I/O library primarily provides functions to return keyboard
@@ -139,6 +139,7 @@ When targetting Linux CONVDU_ANSI and CONKBD_ANSI are defined by default.
 
 History
 -------
+v0.14 31-Dec-2018 Added CONIO colour output, bugfixed left/right/up/down.
 v0.13 21-Dec-2018 Added ANSI output and function/editing input.
 v0.12 25-Nov-2018 Added con_getxy(), filled in gaps and errors with Japanese
 		  keyscans, Ctrl/Shift/Alt handling of special keys rewritten.

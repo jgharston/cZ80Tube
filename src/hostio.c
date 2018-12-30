@@ -22,6 +22,7 @@
    23-Nov-2018 JGH: Added OSBYTE &86, cleaned up OSBYTE &81
    17-Dec-2018 JGH: Added escanable, some work on signals
    19-Dec-2018 JGH: tty settings working with new Linux calls
+   29-Dec-2018 JGH: tty settings for DOS
 */
 
 /* ==================================================================== */
@@ -74,7 +75,9 @@ _kernel_swi_regs regs;			/* Used by OSWORD 0		*/
 /* ==================================================================== */
 #ifdef Z80IO_DOS
 #include <time.h>
+#include <termios.h>
 #include "console.c"
+struct termios termz80;
 #endif
 
 
@@ -115,6 +118,10 @@ signal(SIGBREAK, SIG_DFL);
 
 void esc_on(void)			/* Enable SIGINT for Escape	*/
 {
+#ifdef Z80IO_DOS
+//termz80.c_cc[VINTR]=escchar;		/* Interupt is enabled		*/
+//tcsetattr(stdin, TCSAFLUSH, &termz80);
+#endif
 #ifdef Z80IO_UNIX
   #ifdef TCSAFLUSH
 termz80.c_cc[VINTR]=escchar;		/* Interupt is enabled		*/
@@ -125,6 +132,10 @@ tcsetattr(STDIN_FILENO, TCSAFLUSH, &termz80);
 
 void esc_off(void)			/* Disable SIGINT for Escape	*/
 {
+#ifdef Z80IO_DOS
+//termz80.c_cc[VINTR]=0;		/* Interupt is disabled		*/
+//tcsetattr(stdin, TCSAFLUSH, &termz80);
+#endif
 #ifdef Z80IO_UNIX
   #ifdef TCSAFLUSH
 termz80.c_cc[VINTR]=0;			/* Interupt is disabled		*/
@@ -154,7 +165,12 @@ return tmp;
 void tty_init(void)
 {
 #ifdef Z80IO_WIN
+  int mode;
   SetConsoleCtrlHandler(NULL, TRUE);	/* Ctrl-C is a normal character	*/
+//  GetConsoleMode(NULL, &mode);		/* Enable ANSI processing	*/
+//  SetConsoleMode(NULL, mode | 4); /* ENABLE_VIRTUAL_TERMINAL_PROCESSING	*/
+    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode);
+    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode | 4);
 #endif
 
 #ifdef Z80IO_UNIX
@@ -174,14 +190,21 @@ void tty_init(void)
 /* Set text i/o to raw */
 void tty_raw(void)
 {
+#ifdef Z80IO_DOS
+//  tcgetattr(stdin, &termz80);			/* Get tty settings	*/
+//  termz80.c_cc[VINTR]=escchar;		/* Interupt is Escape	*/
+//  termz80.c_cc[VSUSP]=0;			/* Suspend is disabled	*/
+//  tcsetattr(stdin, TCSAFLUSH, &termz80);
+#endif
 #ifdef Z80IO_UNIX
   #ifdef TCSAFLUSH
   /* Linux-style tty settings */
-  tcgetattr(STDIN_FILENO, &termz80);	/* Get tty settings		*/
-  termz80.c_iflag &= ~ICRNL;		/* RETURN gives <cr>		*/
-  termz80.c_lflag &= ~(ECHO | ICANON);	/* Turn off ECHO, EDITOR	*/
-  termz80.c_cc[VINTR]=escchar;		/* Interupt is Escape		*/
-  termz80.c_cc[VSUSP]=0;		/* Suspend is disabled		*/
+  tcgetattr(STDIN_FILENO, &termz80);		/* Get tty settings	*/
+  termz80.c_iflag &= ~(ICRNL | IXON | IXOFF);	/* <CR>, Ctrl-Q, Ctrl-S	*/
+  termz80.c_oflag &= ~(ONLCR | OCRNL);		/* Raw LF and CR 	*/
+  termz80.c_lflag &= ~(ECHO | ICANON);		/* Turn off Echo, Editor*/
+  termz80.c_cc[VINTR]=escchar;			/* Interupt is Escape	*/
+  termz80.c_cc[VSUSP]=0;			/* Suspend is disabled	*/
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &termz80);
   #else
     #ifdef TIOCGETP
@@ -193,7 +216,7 @@ void tty_raw(void)
     ioctl(stdin,TIOCGETC, &charsz80);	/* Get tty characters		*/
     charsz80.t_intrc=27;		/* Interupt is Escape		*/
     charsz80.t_quitc=-1;		/* Suspend is disabled		*/
-    ioctl(stdin,TIOCSETC,&charsz80);
+    ioctl(stdin,TIOCSETC, &charsz80);
     #endif
   #endif
 #endif
@@ -407,20 +430,23 @@ switch (Areg) {
       return;
       }
     					/* Read timed			*/
-    tmp=clock()+(tmp & 0x7fff)*(CLOCKS_PER_SEC/100);
+    tmp=tmp & 0x7FFF;
+    if (CLOCKS_PER_SEC < 100) tmp=tmp/(100/CLOCKS_PER_SEC);
+    else                      tmp=tmp*(CLOCKS_PER_SEC/100);
+    tmp=clock()+tmp;
     esc_off();				/* Allow kbhit() to detect Esc	*/
     for (;;) {				/* Wait for a key or timeout	*/
       if ((tmp2=kbhit()) || (clock()>tmp)) break;
       }
     if (tmp2) {
       tmp=esc_rdch(0);			/* Get keypress			*/
+      if (Hreg<0x80) tmp=tmp & 0x00FF;	/* Not INKEY(&8000+n)		*/
       } else {
       tmp=0xFFFF; esc_on();		/* No keypress			*/
 #ifdef Z80IO_UNIX
       fflush(stdout);
 #endif
       }
-    if (Hreg < 0x80) tmp=tmp & 0x00FF;	/* Not INKEY(&8000+n)		*/
     Lreg=(int8)(tmp & 0xFF);		/* Character read		*/
     Hreg=(int8)(tmp >> 8);		/* High byte of character or -1	*/
     Freg=Freg | ((mem[0xFF80] & 128) >> 7);	/* Escape		*/
@@ -548,7 +574,7 @@ switch (Areg) {
 
 #ifndef Z80IO_RO
   case 1:				/* Read TIME			*/
-    tmp=(int)clock()/(CLOCKS_PER_SEC/100);    
+    tmp=(int)clock()*(100/CLOCKS_PER_SEC);
     mem[HLreg]=tmp;
     mem[HLreg+1]=tmp >> 8;
     mem[HLreg+2]=tmp >> 16;
