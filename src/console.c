@@ -124,7 +124,7 @@ void gotoxy(int x, int y) { }
 char vduq[10];
 int vduqlen=0;
 #ifdef CONVDU_ANSI
-char ansichars[]="\x1B[0;1;5;4;7;30;40m";
+char ansichars[]="\x1B[0;1;5;4;7;30;40;100m";
 int ansifgd='7'; int ansibgd='0';
 #endif
 
@@ -144,7 +144,11 @@ if (vduqlen) {
     case 17:						/* COLOUR	*/
 #ifdef CONVDU_ANSI
       seq=&ansichars[4];
-      if (vduq[1] & 8)  { *seq++='1'; *seq++=';'; }	/* Bright	*/
+      if (vduq[1] & 8)  { *seq++='1'; *seq++=';';	/* Bright	*/
+#ifdef CONVDU_PC
+                          *seq++='5'; *seq++=';';	/* Bright bgnd	*/
+#endif
+      }
       if (vduq[1] & 16) { *seq++='5'; *seq++=';'; }	/* Flash	*/
       if (vduq[1] & 32) { *seq++='4'; *seq++=';'; }	/* Underline	*/
       if (vduq[1] & 64) { *seq++='7'; *seq++=';'; }	/* Inverse	*/
@@ -152,8 +156,10 @@ if (vduqlen) {
       else                ansifgd='0'+(vduq[1] & 7);	/* Foreground	*/
       if (ansibgd=='0') ansibgd='9';
       *seq++='3'; *seq++=ansifgd; *seq++=';';
-      *seq++='4'; *seq++=ansibgd; *seq++='m';
-      *seq++=0;
+      *seq++='4'; *seq++=ansibgd;
+      if (vduq[1] & 8)  { *seq++=';'; *seq++='1';	/* Bright bgnd	*/
+                          *seq++='0'; *seq++=ansibgd; }
+      *seq++='m'; *seq++=0;
       fputs(ansichars,stdout);
 #else
 #ifdef USECONIO
