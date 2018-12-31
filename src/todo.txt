@@ -1,10 +1,17 @@
+Running on RISC OS *HELP, *FX, etc should not be tested as a *RUN file, should
+be passed directly on to system().
+*RUN file testing a bit shoddy.
+
 calibration in INKEY(timed) needs rewriting to get better accuracy.
 100/93 = 1.07, but becomes 1.
 1000/100 = 10, ok
+Also, should sleep while waiting to reduce CPU usage.
+
+TIME always returns 0 on MinGW/Win32/Linux - fixed.
 
 Unix/ANSI needs getxy().
 
-VDU 10 fails on bottom line of window - fixed, needed raw NL in ioct().
+VDU 10 fails on bottom line of window - fixed, needed raw NL in ioctl().
 
 Unix: turn Ctrl-Q,Ctrl-S off on input - done
 
@@ -14,4 +21,5 @@ Need to do test builds with Unix to get ioctl() calls working. - done
 
 Z80 MOS shouldn't have 'CAT' in command table. - done
 
-Update MEDIT to allow cursor keys &Cx as well as &8x. - change AND 127 to AND 11
+MEDIT should allow cursor keys &Cx as well as &8x. - change AND 127 to AND 11 - done
+

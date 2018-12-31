@@ -137,7 +137,6 @@ Shift, Ctrl and Alt keys properly, particularly with the editing keys.
 +---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
 |1Fx|   |   |   |   |   |   |aIns|aDel|aHome|aEnd|aPgDn|aPgUp| a<-| a->| aDn| aUp|
 +---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-
 As can be seen from the table, bit 5 and bit 4 hold the state of the Shift,
 Control and Alt keys.
 
@@ -147,9 +146,9 @@ properly, particularly with the editing keys.
 
 Keyscan Table
 -------------
-When calling OSBYTE 129 with HL=&FFxx to scan for a key being pressed, the
-Acorn standard values are recognised. Note that some versions of Windows do
-not recognise the Shift, Ctrl and Alt keys properly.
+When calling OSBYTE 129 with HL=&FFxx to scan for a key being pressed, the Acorn
+standard values are recognised. Note that some versions of Windows do not
+recognise the Shift, Ctrl and Alt keys properly.
 
 -001  Shift          -017  Q             -033  F0/Print    -049  1
 -002  Ctrl           -018  3             -034  W           -050  2
@@ -350,7 +349,7 @@ The files directory contains a few useful extra and/or essential items:
 BBCBasic   BBC BASIC for Z80.
 ClockSp    BBC BASIC benchmark program that determines the speed of the
            interpreter relative to the original BBC B. Running on an A5000
-           Z80Tube reposts a speed of 2.48MHz. A test on a 900MHz Pentium
+           Z80Tube reports a speed of 2.48MHz. A test on a 900MHz Pentium
            PC reports a speed of 77MHz. A real Z80 CoProcessor reports a
            speed of 2.68MHz.
 KBDTest    Display keyboard keypress values.

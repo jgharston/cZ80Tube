@@ -4,7 +4,7 @@
 
 @cd %0\..\..\src
 @set PATH=C:\Apps\Programming\TDM-GCC-32\bin;%PATH%
-@gcc z80tube.c -o z80tube.exe -s -w -D__WIN32__ -DCONVDU_ANSI
+@gcc z80tube.c -o z80tube.exe -s -O -w -D__WIN32__ -DCONVDU_ANSI
 @mkdir ..\binaries >NUL: 2>NUL:
 @if exist z80tube.exe copy z80tube.exe ..\binaries\cZ80mgw.exe >NUL:
 @if exist z80tube.exe del z80tube.exe

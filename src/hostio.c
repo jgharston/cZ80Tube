@@ -574,7 +574,8 @@ switch (Areg) {
 
 #ifndef Z80IO_RO
   case 1:				/* Read TIME			*/
-    tmp=(int)clock()*(100/CLOCKS_PER_SEC);
+    if (CLOCKS_PER_SEC < 100) tmp=(int)clock()*(100/CLOCKS_PER_SEC);
+    else                      tmp=(int)clock()/(CLOCKS_PER_SEC/100);
     mem[HLreg]=tmp;
     mem[HLreg+1]=tmp >> 8;
     mem[HLreg+2]=tmp >> 16;
