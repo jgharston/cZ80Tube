@@ -7,6 +7,7 @@
 /* Ctrl/Shift handling of special keys rewritten		*/
 /* v0.13: added ANSI input and output				*/
 /* v0.14: added DOS GetASyncKeyState and CONIO colours		*/
+/*        added bright background colours			*/
 /*								*/
 /* ANSI output can be enabled with #define CONVDU_ANSI		*/
 /* linux target defaults to using CONVDU_ANSI			*/
@@ -124,7 +125,7 @@ void gotoxy(int x, int y) { }
 char vduq[10];
 int vduqlen=0;
 #ifdef CONVDU_ANSI
-char ansichars[]="\x1B[0;1;5;4;7;30;40;100m";
+char ansichars[]="\x1B[0;1;5;4;7;30;40;100;4m";
 int ansifgd='7'; int ansibgd='0';
 #endif
 
@@ -142,23 +143,26 @@ if (vduqlen) {
   if (vduqlen != 0) return;
   switch(vduq[0]) {
     case 17:						/* COLOUR	*/
+      if ((vduq[1] & 0xC0) == 0xC0) return;		/* Border	*/
 #ifdef CONVDU_ANSI
       seq=&ansichars[4];
-      if (vduq[1] & 8)  { *seq++='1'; *seq++=';';	/* Bright	*/
+      if (vduq[1] & 0x10) { *seq++='5'; *seq++=';'; }	/* Flash	*/
+      if (vduq[1] & 0x20) { *seq++='4'; *seq++=';'; }	/* Underline	*/
+      if (vduq[1] & 0x40) { *seq++='7'; *seq++=';'; }	/* Inverse	*/
+      if (vduq[1] & 0x80) ansibgd=(vduq[1] & 15);	/* Set bgnd	*/
+      else                ansifgd=(vduq[1] & 15);	/* Set fgnd	*/
+      *seq++='3'; *seq++='0'+(ansifgd & 7); *seq++=';';	/* Foreground	*/
+      if (ansifgd & 0x08) { *seq++='1'; *seq++=';'; }	/* Bright fgnd	*/
+      *seq++='4';					/* Background	*/
+      if (ansibgd & 15) *seq++='0'+(ansibgd & 7);
+      else              *seq++='9';
+      if (ansibgd & 0x08) {				/* Bright bgnd	*/
+        *seq++=';'; *seq++='1';
+        *seq++='0'; *seq++='0'+(ansibgd & 7);
 #ifdef CONVDU_PC
-                          *seq++='5'; *seq++=';';	/* Bright bgnd	*/
+        *seq++=';'; *seq++='4';
 #endif
       }
-      if (vduq[1] & 16) { *seq++='5'; *seq++=';'; }	/* Flash	*/
-      if (vduq[1] & 32) { *seq++='4'; *seq++=';'; }	/* Underline	*/
-      if (vduq[1] & 64) { *seq++='7'; *seq++=';'; }	/* Inverse	*/
-      if (vduq[1] & 128)  ansibgd='0'+(vduq[1] & 7);	/* Background	*/
-      else                ansifgd='0'+(vduq[1] & 7);	/* Foreground	*/
-      if (ansibgd=='0') ansibgd='9';
-      *seq++='3'; *seq++=ansifgd; *seq++=';';
-      *seq++='4'; *seq++=ansibgd;
-      if (vduq[1] & 8)  { *seq++=';'; *seq++='1';	/* Bright bgnd	*/
-                          *seq++='0'; *seq++=ansibgd; }
       *seq++='m'; *seq++=0;
       fputs(ansichars,stdout);
 #else
@@ -275,7 +279,7 @@ for (;;) {
   if (c == 27 || c == 13 || c == 10) break;
   }
 mem[(int)addr]=0;
-if (c == 27) return (-1);
+if (c == 27) return -1;
 con_wrch(10); con_wrch(13);
 return l;
 }
@@ -285,7 +289,7 @@ return l;
 /* key <0xC0 is returned key, else base key to xor with Shift/Ctrl/Alt	*/
 unsigned char winkey[]={
 0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07, /* 00-07			*/
-0xc4,0xc1,0xc5,0x0b,0x0c,0x0d,0x0e,0x0f, /* sBS,sTAB,sRET,0C-0F		*/
+0xc2,0xc3,0xc5,0x0b,0x0c,0x0d,0xc2,0xc3, /* sBS,sTAB,sRET,0C-0E,sTAB	*/
 0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17, /* 10-17			*/
 0x18,0x19,0x1a,0xc3,0x1c,0x1d,0x1e,0x1f, /* 18-1A,sESC,1C-1F		*/
 0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27, /* 20-27			*/
@@ -298,15 +302,15 @@ unsigned char winkey[]={
 0x95,0x96,0x97,0x98,0x99,0x9a,0xa1,0xa2, /* sF5-sF10,cF1,cF2		*/
 0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa, /* cF3-cF10			*/
 0xb1,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8, /* aF1-aF8			*/
-0xb9,0xba,0xa0,0xcc,0xcd,0xc9,0xca,0xc8, /* aF9-aF10,cPrint,c<-,c->,cEnd,cPgDn,cHome */
-0xcb,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f, /* cPgUp,79-7F				*/
-0x80,0x81,0x82,0x83,0x84,0x8b,0x8c,0x9b, /* 80-84,F11-12,sF11			*/
-0x9c,0xab,0xac,0xbb,0xbc,0xcf,0x8e,0x8f, /* sF12,cF11-12,aF11-12,cUp,8E-8F	*/
-0x90,0xce,0xc6,0xc7,0xc1,0x95,0x96,0xc8, /* 90,cDown,cIns,cDel,cTab,95,96,aHome	*/
-0xcf,0xcb,0x9a,0xcc,0x9c,0xcd,0x9e,0xc9, /* aUp,aPgUp,9A,a<-,9C,a->,9E,aEnd	*/
-0xce,0xca,0xc6,0xc7,0xa4,0xc1,0xa6,0xa7, /* aDn,aPgDn,aIns,aDel,A4,aTab,A6-A7	*/
-0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xaf, /* A8-AF				*/
-0xb0,0xb1,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,
+0xb9,0xba,0xa0,0xcc,0xcd,0xc9,0xca,0xc8, /* aF9-aF10,cPrint,c<-,c->,cEnd,cPgDn,cHome	*/
+0xcb,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f, /* cPgUp,79-7F					*/
+0x80,0x81,0x82,0x83,0xcb,0x8b,0x8c,0x9b, /* 80-83,cPgUp,F11-12,sF11			*/
+0x9c,0xab,0xac,0xbb,0xbc,0xcf,0x8e,0x8f, /* sF12,cF11-12,aF11-12,cUp,8E-8F		*/
+0x90,0xce,0xc6,0xc7,0xc3,0x95,0x96,0xc8, /* 90,cDown,cIns,cDel,cTab,95,96,aHome		*/
+0xcf,0xcb,0x9a,0xcc,0x9c,0xcd,0x9e,0xc9, /* aUp,aPgUp,9A,a<-,9C,a->,9E,aEnd		*/
+0xce,0xca,0xc6,0xc7,0xa4,0xc3,0xa6,0xa7, /* aDn,aPgDn,aIns,aDel,A4,aTab,A6-A7		*/
+0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xc2, /* A8-AE,WIDTH					*/
+0xc2,0xc2,0xf3,0xb3,0xb4,0xb5,0xb6,0xb7, /* sWIDTH,cWIDTH,aWIDTH			*/
 0xb8,0xb9,0xba,0xbb,0xbc,0xbd,0xbe,0xbf,
 0xc0,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,
 0xc8,0xc9,0xca,0xcb,0xcc,0xcd,0xce,0xcf,
@@ -340,24 +344,24 @@ unsigned char ansikey[]={
 int con_rdch() {
 int ch,s,c,a;
 
-if (isatty(fileno(stdin)) == 0) if ((ch=getchar()) != EOF) return(ch);
+if (isatty(fileno(stdin)) == 0) if ((ch=getchar()) != EOF) return ch;
 #ifndef CONKBD_ANSI
 #ifdef CONKBD_PC
 ch=getch();				/* Read from console		*/
 /* to do: if <0x20 and modifier pressed, do a translate */
-if (ch != 0 && ch != 0xe0) return(ch);	/* Standard keyboard chars	*/
-a=(GetAsyncKeyState(VK_MENU)<0);	/* Check for modifier keys	*/
+if (ch != 0 && ch != 0xe0) return ch;	/* Standard keyboard chars	*/
+s=(GetAsyncKeyState(VK_SHIFT)<0);	/* Check for modifier keys	*/
 c=(GetAsyncKeyState(VK_CONTROL)<0);
-s=(GetAsyncKeyState(VK_SHIFT)<0);
+if(a=(GetAsyncKeyState(VK_MENU)<0)) c=0;
 ch=getch();
-if (ch == 0x86)				/* Either F12 or cPgUp		*/
-  if (c) ch=0x78;			/* Remap cPgUp			*/
+if (ch == 0x29) return 0xAC;		/* Alt-Top-left key		*/
+if (ch == 0x86) if (c) ch=0x78;		/* Separate F12 and cPgUp	*/
 if (((ch=winkey[ch] | 0x100) & 0xc0) == 0x80)
-  return(ch);				/* Translate keys, return 80-BF	*/
+  return ch;				/* Translate keys, return 80-BF	*/
 if (s) ch=ch ^ 0x10;			/* SHIFT pressed		*/
 if (c) ch=ch ^ 0x20;			/* CTRL pressed			*/
 if (a) ch=ch ^ 0x30;			/* ALT pressed			*/
-return(ch);				/* Other keys need extra help	*/
+return ch;				/* Other keys need extra help	*/
 #else
 return getchar();
 #endif
@@ -566,17 +570,17 @@ if (key <0x080) {			/* Scan for single key		*/
   }
 #endif /* !DJGPP */
   key=winmap[key];			/* Get translated keyscan code	*/
-  if (key) return(GetAsyncKeyState(key)<0 ? -1 : 0);
-    else return(0);			/* Return -1 if key pressed	*/
+  if (key) return (GetAsyncKeyState(key)<0 ? -1 : 0);
+    else return 0;			/* Return -1 if key pressed	*/
   }
 
-if (key < 0x100) return(TRUE);		/* Scan range - unimplemented	*/
+if (key < 0x100) return TRUE;		/* Scan range - unimplemented	*/
 
 if (key < 0x200)			/* Direct API call		*/
-  return(GetAsyncKeyState(key ^ 0x1ff)<0 ? -1 : 0);
+  return (GetAsyncKeyState(key ^ 0x1ff)<0 ? -1 : 0);
 #endif
 
-return(0);				/* Everything else returns FALSE*/
+return 0;				/* Everything else returns FALSE*/
 }
 
 
@@ -593,7 +597,7 @@ void con_getxy(int *x, int *y) {
 /* -------------------------------------------------------------------- */
 void con_init() {
 //#ifdef __DOS__
-//setvbuf(stdout, 0, _IONBF, 0);			/* Unbuffered output	*/
+//setvbuf(stdout, 0, _IONBF, 0);		/* Unbuffered output	*/
 //#endif
 }
 

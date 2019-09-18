@@ -239,6 +239,7 @@ void tty_host(void) {
     ioctl(stdin,TIOCSETC,&charsz80);
     #endif
   #endif
+fflush(stdout);
 #endif
 }
 
@@ -334,7 +335,7 @@ exit(0);				/* And exit			*/
 
 
 /* ==================================================================== */
-/* OSCLI - Execute an command						*/
+/* OSCLI - Execute a command						*/
 /* ==================================================================== */
 extern int lptr;
 void MOS_CLI(void)
@@ -415,7 +416,7 @@ switch (Areg) {
     switch (Lreg) {
       case 0xFF:			/* IF ADVAL(-1) THEN keypending	*/
         tmp=kbhit(); break;
-      case 16:				/* ADVAL(16) - 16-bit GET	*/
+      case 127:				/* ADVAL(128-1) low-level GET	*/
         tmp=esc_rdch(1); break;
     }
     break;
