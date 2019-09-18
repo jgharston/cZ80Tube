@@ -55,7 +55,7 @@ OSBYTE
 
  A=128:     Read device or buffer (ADVAL)
   HL=&FFFF    - returns 0 if no keyboard input pending, <>0 otherwise
-  HL=&0010    - waits for and returns 16-bit keypress
+  HL=&007F    - waits for and returns 16-bit keypress
 
  A=129:     Wait for byte from input in HL or scan for keypress (INKEY)
   HL=&0000+cs - max time in centiseconds to wait, return 8-bit keypress
