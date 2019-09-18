@@ -1,9 +1,10 @@
 @rem Make cZ80Tube for Windows with MinGW compiler
 @rem Edit path to ming32-gcc to match your installation
-@rem NOT WORKING
 
-@cd %0\..\..\src
+@echo Make cZ80Tube for Windows with MinGW compiler
 @set PATH=C:\Apps\Programming\TDM-GCC-32\bin;%PATH%
+@
+@cd %0\..\..\src
 @gcc z80tube.c -o z80tube.exe -s -O -w -D__WIN32__ -DCONVDU_ANSI
 @mkdir ..\binaries >NUL: 2>NUL:
 @if exist z80tube.exe copy z80tube.exe ..\binaries\cZ80mgw.exe >NUL:

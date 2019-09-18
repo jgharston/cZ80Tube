@@ -1,10 +1,13 @@
 @rem Make cZ80Tube for DOS with DJGPP compiler
 @rem Edit DJGPP and PATH paths to match your installation
-@rem NOT WORKING - gcc gives SIGSECV: Stack Overflow
+@rem NOT WORKING - gcc gives SIGSEGV: Stack Overflow
+@rem GGGRRRRRR - was working a moment ago
 
-@cd %0\..\..\src
+@echo Make cZ80Tube for DOS with DJGPP compiler
 @set DJGPP=C:\Apps\Programming\djgpp\djgpp.env
 @set PATH=C:\Apps\Programming\djgpp\bin;%PATH%
+@
+@cd %0\..\..\src
 @gcc z80tube.c -o z80tube.exe -w -s -O -D__DOS__ -DUSECONIO
 @mkdir ..\binaries >NUL: 2>NUL:
 @if exist z80tube.exe copy z80tube.exe ..\binaries\cZ80djp.exe >NUL:
