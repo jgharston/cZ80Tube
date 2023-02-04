@@ -3,47 +3,51 @@
                            J.G.Harston and others
                         http://mdfs.net/System/C/Lib
                  70 Camm Street, Walkley, Sheffield, S6 3TR
-                      Version 0.14 - Date: 31-Dec-2018
+                      Version 0.15 - Date: 31-Dec-2018
 
 
-This Windows console I/O library primarily provides functions to return keyboard
-keypresses with the keycodes ordered in a regular manner rather than the apparently
-random order of the native Windows keycodes, and allows top-bit set function and
-editing keys to be distinguished from top-bit set characters. It also provides a
-simple console output function that implements simple cursor movement.
-
+This console I/O library primarily provides functions to return keyboard keypresses
+with the keycodes ordered in a regular manner rather than the apparently random
+order some systems generate, particularly native Windows keycodes. It also allows
+top-bit set function and editing keys to be distinguished from top-bit set characters.
+It also provides a simple console output function that implements simple cursor movement.
+If compiled for ANSI console output it provides a simple interface to select text
+colours as part of the text stream.
 
 int con_rdch(void) - Read single character from input stream
 ------------------------------------------------------------
 If the input stream is not attached to the keyboard then the next input byte is
 immediately returned. When reading from the keyboard, function and editing keys
-return 0x100+x to distinguish them from normal top-bit set keys, such as accented
-characters. The values returned are in the following table.
+return 0x180+x to distinguish them from normal top-bit-set keys, such as accented
+characters. Alt plus printable characters returns 0x100+x where x is the normal
+character code, unless the Alt-character is already translated to a top-bit-set key.
+The values returned by function and editing keys are in the following table.
 
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|   |  0  | 1 | 2 | 3 | 4 | 5 |  6 |  7 |  8  |  9 |  A  |  B  |  C |  D |  E |  F |
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|18x| Prnt| F1| F2| F3| F4| F5|  F6|  F7|  F8 |  F9| F10 | F11 | F12| F13| F14| F15|
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|19x|sPrnt|sF1|sF2|sF3|sF4|sF5| sF6| sF7| sF8 | sF9| sF10| sF11|sF12|sF13|sF14|sF15|
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Ax|cPrnt|cF1|cF2|cF3|cF4|cF5| cF6| cF7| cF8 | cF9| cF10| cF11|cF12|cF13|cF14|cF15|
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Bx|aPrnt|aF1|aF2|aF3|aF4|aF5| aF6| aF7| aF8 | aF9| aF10| aF11|aF12|aF13|aF14|aF15|
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Cx|     |   |   |   |   |   | Ins| Del| Home| End| PgDn| PgUp| <- | -> | Dn | Up |
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Dx|     |   |   |   |   |   |sIns|sDel|sHome|sEnd|sPgDn|sPgUp| s<-| s->| sDn| sUp|
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Ex|     |   |   |   |   |   |cIns|cDel|cHome|cEnd|cPgDn|cPgUp| c<-| c->| cDn| cUp|
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Fx|     |   |   |   |   |   |aIns|aDel|aHome|aEnd|aPgDn|aPgUp| a<-| a->| aDn| aUp|
-+---+-----+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|   |  0  | 1 | 2 | 3  | 4 | 5  |  6 |  7 |  8  |  9 |  A  |  B  |  C |  D |  E |  F |
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|18x| Prnt| F1| F2| F3 | F4| F5 |  F6|  F7|  F8 |  F9| F10 | F11 | F12| F13| F14| F15|
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|19x|sPrnt|sF1|sF2|sF3 |sF4|sF5 | sF6| sF7| sF8 | sF9| sF10| sF11|sF12|sF13|sF14|sF15|
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ax|cPrnt|cF1|cF2|cF3 |cF4|cF5 | cF6| cF7| cF8 | cF9| cF10| cF11|cF12|cF13|cF14|cF15|
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Bx|aPrnt|aF1|aF2|aF3 |aF4|aF5 | aF6| aF7| aF8 | aF9| aF10| aF11|aF12|aF13|aF14|aF15|
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Cx|     |   |   |    |   |    | Ins| Del| Home| End| PgDn| PgUp| <- | -> | Dn | Up |
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Dx|     |   |   |    |   |sTAB|sIns|sDel|sHome|sEnd|sPgDn|sPgUp| s<-| s->| sDn| sUp|
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ex|     |   |   |    |   |cTAB|cIns|cDel|cHome|cEnd|cPgDn|cPgUp| c<-| c->| cDn| cUp|
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Fx|     |   |   |    |   |aTAB|aIns|aDel|aHome|aEnd|aPgDn|aPgUp| a<-| a->| aDn| aUp|
++---+-----+---+---+----+---+----+----+----+-----+----+-----+-----+----+----+----+----+
 As can be seen from the table, bit 5 and bit 4 hold the state of the Shift, Control
 and Alt keys.
 
 Note that some versions of Windows don't recognise the Shift, Ctrl and Alt keys
-properly, particularly with the editing keys.
+properly, particularly with the editing keys; and in some environments not all
+keypresses are passed to the caller.
 
 
 int con_keyscan(int key) - Scan for keypress
@@ -111,7 +115,7 @@ or <0 if Escape is pressed.
 void con_wrch(int c) - Write a character to output
 --------------------------------------------------
 Sends characters to the current output stream. If the output stream is the console,
-the following cursor movement is implemented:
+the following cursor movement and colour selection is implemented:
       0x08 - cursor left        0x11,n   - select ANSI text colour
       0x09 - cursor right       0x14     - reset to default ANSI text colours
       0x0A - cursor down 
@@ -139,12 +143,13 @@ When targetting Linux CONVDU_ANSI and CONKBD_ANSI are defined by default.
 
 History
 -------
+v0.15 31-Dec-2018 Alt-printable keys returns 0x100+character.
 v0.14 31-Dec-2018 Added CONIO colour output, bugfixed left/right/up/down.
 v0.13 21-Dec-2018 Added ANSI output and function/editing input.
 v0.12 25-Nov-2018 Added con_getxy(), filled in gaps and errors with Japanese
 		  keyscans, Ctrl/Shift/Alt handling of special keys rewritten.
 v0.11 07-Dec-2003 con_wrch(9) uses gotoxy().
-v0.10 1997
+v0.10        1997 Initial version.
 
 
 Disclaimer

@@ -4,7 +4,7 @@ be passed directly on to system().
 
 calibration in INKEY(timed) needs rewriting to get better accuracy.
 100/93 = 1.07, but becomes 1.
-1000/100 = 10, ok
+1000/100 = 10, ok - done
 Also, should sleep while waiting to reduce CPU usage.
 
 TIME always returns 0 on MinGW/Win32/Linux - fixed.

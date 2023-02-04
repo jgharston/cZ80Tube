@@ -126,7 +126,8 @@ void gotoxy(int x, int y) { }
 char vduq[10];
 int vduqlen=0;
 #ifdef CONVDU_ANSI
-char ansichars[]="\x1B[25;24;27;21;30m";
+char ansichars[]="\x1B[0;1;5;4;7;30;40;100;4m";
+int ansifgd='7'; int ansibgd='0';
 #endif
 
 
@@ -141,35 +142,32 @@ if (isatty(fileno(stdout)) == 0) { putchar(c); return; }
 if (vduqlen) {
   vduq[vduqlen--]=c;
   if (vduqlen != 0) return;
-  c=vduq[1];
   switch(vduq[0]) {
     case 17:						/* COLOUR	*/
-      if ((c & 0xC0) == 0xC0) return;			/* Border	*/
+      if ((vduq[1] & 0xC0) == 0xC0) return;		/* Border	*/
 #ifdef CONVDU_ANSI
-      seq=&ansichars[2];				/* CHR$27;"["	*/
-      if ((c & 0x10)==0) *seq++='2';
-      *seq++='5'; *seq++=';';				/* Flash	*/
-      if ((c & 0x20)==0) *seq++='2';
-      *seq++='4'; *seq++=';';				/* Underline	*/
-      if ((c & 0x40)==0) *seq++='2';
-      *seq++='7'; *seq++=';';				/* Inverse	*/
-      if (c & 0x80) {
-        *seq++='4'; *seq++='0'+(c & 7);			/* Background	*/
-        if (c & 0x08) { *seq++=';';
-                        *seq++='1';
-                        *seq++='0'; 
-                        *seq++='0'+(c & 7);		/* Bright bgnd	*/
+      seq=&ansichars[4];
+      if (vduq[1] & 0x10) { *seq++='5'; *seq++=';'; }	/* Flash	*/
+      if (vduq[1] & 0x20) { *seq++='4'; *seq++=';'; }	/* Underline	*/
+      if (vduq[1] & 0x40) { *seq++='7'; *seq++=';'; }	/* Inverse	*/
+      if (vduq[1] & 0x80) ansibgd=(vduq[1] & 15);	/* Set bgnd	*/
+      else                ansifgd=(vduq[1] & 15);	/* Set fgnd	*/
+      if (ansifgd & 0x08) { *seq++='1'; *seq++=';'; }	/* Bright fgnd	*/
+      *seq++='3'; *seq++='0'+(ansifgd & 7);		/* Foreground	*/
+      if (ansibgd > 0x00) { *seq++=';';
+                            *seq++='4';
+                            *seq++='0'+(ansibgd & 7);	/* Background	*/
         }
-      } else {
-        if ((c & 0x08)==0) *seq++='2';
-        *seq++='1'; *seq++=';';				/* Bright fgnd	*/
-        *seq++='3'; *seq++='0'+(c & 7);			/* Foreground	*/
-      }
+      if (ansibgd & 0x08) { *seq++=';';
+                            *seq++='1';
+                            *seq++='0'; 
+                            *seq++='0'+(ansibgd & 7);	/* Bright bgnd	*/
+        }
       *seq++='m'; *seq++=0;
       fputs(ansichars,stdout);
 #else
 #ifdef USECONIO
-      c=colourmap[c & 15];
+      c=colourmap[vduq[1] & 15];
       if (vduq[1] & 128) textbackground(c & 7);			/* Background	*/
       else           textcolor((c & 15) | ((vduq[1] & 16)<<3));	/* Foreground	*/
 #endif
@@ -178,6 +176,7 @@ if (vduqlen) {
     case 22:					/* MODE		*/
 #ifdef CONVDU_ANSI
       fputs("\x1B[0m",stdout);			/* Reset colours*/
+      ansifgd='7'; ansibgd='0';
 #else
 #ifdef USECONIO
       textattr(7);				/* Reset colours*/
@@ -188,7 +187,6 @@ if (vduqlen) {
     }
   return;
   }
-vduq[0]=c;
 switch (c) {
 #ifdef CONVDU_PC
   case 8:   putch(8); break;			/* Move left	*/
@@ -213,20 +211,21 @@ switch (c) {
 #endif /* !CONVDU_PC */
 
   case 12:  clrscr(); break;			/* CLS		*/
-  case 17:  vduqlen=1; break;			/* COLOUR	*/
+  case 17:  vduq[0]=c; vduqlen=1; break;	/* COLOUR	*/
   case 20:
 #ifdef CONVDU_ANSI
             fputs("\x1B[0m",stdout);		/* Reset colours*/
+            ansifgd='7'; ansibgd='0';
 #else
 #ifdef USECONIO
             textattr(7);			/* Reset colours*/
 #endif
 #endif
             break;
-  case 22:  vduqlen=1; break;			/* MODE		*/
-  case 23:  vduqlen=9; break;			/* VDU 23	*/
+  case 22:  vduq[0]=c; vduqlen=1; break;	/* MODE		*/
+  case 23:  vduq[0]=c; vduqlen=9; break;	/* VDU 23	*/
   case 30:  gotoxy(1,1); break;			/* HOME		*/
-  case 31:  vduqlen=2; break;			/* TAB()	*/
+  case 31:  vduq[0]=c; vduqlen=2; break;	/* TAB()	*/
 #ifdef USECONIO
   case 127: putch(8); putch(32); putch(8); break;
   default:  putch(c);

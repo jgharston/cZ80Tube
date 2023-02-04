@@ -20,7 +20,7 @@
                then use ioctl to change, and on shutdown, set back
    30-Aug-2003 JGH: Now called hostio.c
    23-Nov-2018 JGH: Added OSBYTE &86, cleaned up OSBYTE &81
-   17-Dec-2018 JGH: Added escanable, some work on signals
+   17-Dec-2018 JGH: Added escenable, some work on signals
    19-Dec-2018 JGH: tty settings working with new Linux calls
    29-Dec-2018 JGH: tty settings for DOS
 */
@@ -95,7 +95,7 @@ switch(sig) {
 #ifdef SIGBREAK
   case SIGBREAK:			/* Ctrl-Break pressed		*/
 #endif
-    mem[0xFF80]=128;			/* Set Z80's escape flag	*/
+    if (escenable == 0) mem[0xFF80]=128; /* Set Z80's escape flag	*/
     signal(sig, keyint_pressed);	/* Re-attach signal		*/
   }
 }
@@ -462,6 +462,18 @@ switch (Areg) {
     Lreg=escenable;			/* Return old state		*/
     escenable=(int8)tmp;		/* Set new state		*/
     return;    
+
+// Support for CPM:
+  case 0x98:				/* Read buffer status		*/
+    Freg=Freg | 1;			/* Set Carry flag = empty	*/
+    if (Lreg == 0) if (kbhit()) Freg=Freg | 254;
+    return;
+  case 0xB1:				/* Read input stream		*/
+    Lreg=0;				/* Input=keyboard		*/
+    return;    
+  case 0xD8:				/* Read soft key length		*/
+    Lreg=0;				/* Key length=zero		*/
+    return;    
 #endif
   
   case 0x82:				/* Read Hi Order Address	*/
@@ -585,12 +597,12 @@ switch (Areg) {
     return;
 #endif
 
-  case 5:				/* Read from memory		*/
-    mem[HLreg+4]=*(char *)addr32;
+  case 5:				/* Read from I/O memory		*/
+    mem[HLreg+4]=iomem[addr & 0x0FFF];
     return;
 
-  case 6:				/* Write to memory		*/
-    *(char *)addr32=mem[HLreg+4];
+  case 6:				/* Write to I/O memory		*/
+    iomem[addr & 0x0FFF]=mem[HLreg+4];
     return;
 
   case 127:				/* FM direct disk I/O		*/
@@ -658,7 +670,7 @@ Freg=(Freg & 254) | ((mem[0xFF80] & 128) >> 7);	/* Cy set from ESCFLG	*/
 
 
 /* Adjust address of &0000xxxx to point to real memory */
-/* To do: also support &FFFFxxxx for iomem CP/M buffer */
+/*               and &FFFFxxxx for iomem CP/M buffer */
 void adjustaddr(int *n, int *m)
 {
 #ifdef Z80IO_RO
@@ -765,7 +777,7 @@ endL  =mem[HLreg+14]+(mem[HLreg+15]<<8); endH  =mem[HLreg+16]+(mem[HLreg+17]<<8)
 switch(Areg) {
   case 0xFF:				/* LOAD				*/
     if((execL & 0xFF) != 0) {
-      z80error(252,"","LOAD address needed");  /* Generate an error	*/
+      z80error(252,"","Bad address");	/* Generate an error		*/
       } else {
       tmp=load(iobuffer,loadL);		/* Try to load file		*/
       if (tmp == -1) {			/* Couldn't load file		*/

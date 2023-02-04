@@ -1,8 +1,8 @@
-                     Z80Tube Emulator in C Version 0.27
+                     Z80Tube Emulator in C Version 0.28
                      ==================================
                      J.G.Harston - http://www.mdfs.net/
                  70 Camm Street, Walkley, Sheffield, S6 3TR
-                             Date: 31-Dec-2018
+                             Date: 31-Jan-2019
 
 
 cZ80Tube emulates a Z80 coprocessor, written in C. On running, various
@@ -45,7 +45,7 @@ MOS Implementation
 ------------------
 There is a limited MOS host implementation. Calls to the standard I/O
 routines at &FFCE to &FFF7 provide a minimum of the following functions.
-These can be expanded by added relavant code to hostio.c
+These can be expanded by added relevant code to hostio.c
 
 OSCLI
  HL=>command string to pass to system.
@@ -82,12 +82,13 @@ OSWRCH
  redirected then the characters are interpreted to perform the following
  console functions:
    8 - left, 9 - right, 10 - down, 11 - up, 12 - CLS, 13 - CR
-   31,x,y - move to position, 30 - home
+   30 - home, 31,x,y - move to position
 
  If cZ80Tube is built with CONVDU_ANSI defined then ANSI colour sequences
  are used to select text colours with:
    17,n - select text colour
    20   - select default text colours
+   22,n - clear screen and select default text colours
 
 OSRDCH
  Waits for and returns a byte from the input stream. If the input stream is
@@ -113,35 +114,37 @@ from top-bit set characters.
 Keycode Top-Bit Table
 ---------------------
 Function and editing keys return the following codes when OSBYTE 129 or
-OSRDCH is called. OSBYTE 129,&8000+cs will return the 16bit value &0100+x to
+OSRDCH is called. OSBYTE 129,&8000+cs will return the 16bit value &0180+x to
 distinguish function and editing keys from normal topbit set keys, such as
-accented characters. Note that some versions of Windows don't recognise the
-Shift, Ctrl and Alt keys properly, particularly with the editing keys.
+accented characters. Alt plus printable characters returns &0100+x where x is
+the normal character, unless the Alt-keypress already returns a top-bit-set
+character.
 
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|   | 0 | 1 | 2 | 3 | 4 | 5 |  6 |  7 |  8  |  9 |  A  |  B  |  C |  D |  E |  F |
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|18x| F0| F1| F2| F3| F4| F5|  F6|  F7|  F8 |  F9| F10 | F11 | F12| F13| F14| F15|
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|19x|sF0|sF1|sF2|sF3|sF4|sF5| sF6| sF7| sF8 | sF9| sF10| sF11|sF12|sF13|sF14|sF15|
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Ax|cF0|cF1|cF2|cF3|cF4|cF5| cF6| cF7| cF8 | cF9| cF10| cF11|cF12|cF13|cF14|cF15|
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Bx|aF0|aF1|aF2|aF3|aF4|aF5| aF6| aF7| aF8 | aF9| aF10| aF11|aF12|aF13|aF14|aF15|
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Cx|   |   |   |   |   |   | Ins| Del| Home| End| PgDn| PgUp| <- | -> | Dn | Up |
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Dx|   |   |   |   |   |   |sIns|sDel|sHome|sEnd|sPgDn|sPgUp| s<-| s->| sDn| sUp|
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Ex|   |   |   |   |   |   |cIns|cDel|cHome|cEnd|cPgDn|cPgUp| c<-| c->| cDn| cUp|
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
-|1Fx|   |   |   |   |   |   |aIns|aDel|aHome|aEnd|aPgDn|aPgUp| a<-| a->| aDn| aUp|
-+---+---+---+---+---+---+---+----+----+-----+----+-----+-----+----+----+----+----+
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|   | 0 | 1 | 2 | 3 | 4 |  5 |  6 |  7 |  8  |  9 |  A  |  B  |  C |  D |  E |  F |
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|18x| F0| F1| F2| F3| F4|  F5|  F6|  F7|  F8 |  F9| F10 | F11 | F12| F13| F14| F15|
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|19x|sF0|sF1|sF2|sF3|sF4| sF5| sF6| sF7| sF8 | sF9| sF10| sF11|sF12|sF13|sF14|sF15|
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ax|cF0|cF1|cF2|cF3|cF4| cF5| cF6| cF7| cF8 | cF9| cF10| cF11|cF12|cF13|cF14|cF15|
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Bx|aF0|aF1|aF2|aF3|aF4| aF5| aF6| aF7| aF8 | aF9| aF10| aF11|aF12|aF13|aF14|aF15|
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Cx|   |   |   |   |   |    | Ins| Del| Home| End| PgDn| PgUp| <- | -> | Dn | Up |
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Dx|   |   |   |   |   |sTAB|sIns|sDel|sHome|sEnd|sPgDn|sPgUp| s<-| s->| sDn| sUp|
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Ex|   |   |   |   |   |cTAB|cIns|cDel|cHome|cEnd|cPgDn|cPgUp| c<-| c->| cDn| cUp|
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
+|1Fx|   |   |   |   |   |aTAB|aIns|aDel|aHome|aEnd|aPgDn|aPgUp| a<-| a->| aDn| aUp|
++---+---+---+---+---+---+----+----+----+-----+----+-----+-----+----+----+----+----+
 As can be seen from the table, bit 5 and bit 4 hold the state of the Shift,
 Control and Alt keys.
 
 Note that some versions of Windows don't recognise the Shift, Ctrl and Alt keys
-properly, particularly with the editing keys.
+properly, particularly with the editing keys; and some environments do not pass
+on some keycodes.
 
 
 Keyscan Table
@@ -339,7 +342,7 @@ Escape/Break/etc.
   Escape state. CHR$27 will generate an Escape state when read with GET or
   INKEY unless disabled with *FX229,1.
   
-  When building for UNIX or RISC OS, CHR$27 is set to the Escape character.
+  When building for UNIX or RISC OS the Escape character is set to CHR$27.
 
 
 Extras
@@ -366,3 +369,4 @@ v0.26 31-Aug-2004 Dave Daniels added OSWORD &7F and OSWORD &FF for CPM support.
                   declarations moved to main.c
 v0.27 31-Dec-2018 Updated console module, supports ANSI I/O, added *FX command,
                   updated unix and DOS tty control.
+v0.28 31-Jan-2019 Added OSBYTEs to support CP/M, corrected disk error numbers.

@@ -1,6 +1,9 @@
 @rem Make cZ80Tube for Windows with Visual Studio compiler
 @rem Run from Visual Studio command prompt
 
+@if "%DEVENVDIR%" == "" echo Must be run from Visual Studio command prompt
+@if "%DEVENVDIR%" == "" pause
+@if "%DEVENVDIR%" == "" exit
 @cd %0\..\..\src
 @cl /Ox /w /EHsc z80tube.c user32.lib -D__WIN32__ -DCONVDU_ANSI
 @mkdir ..\binaries >NUL: 2>NUL:

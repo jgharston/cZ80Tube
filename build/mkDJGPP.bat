@@ -1,7 +1,8 @@
 @rem Make cZ80Tube for DOS with DJGPP compiler
 @rem Edit DJGPP and PATH paths to match your installation
-@rem NOT WORKING - gcc gives SIGSEGV: Stack Overflow
-@rem GGGRRRRRR - was working a moment ago
+@
+@rem Hmmm. Works on WinXP desktop, but not on Win7 laptop
+@rem gcc gives SIGSEGV: Stack Overflow
 
 @echo Make cZ80Tube for DOS with DJGPP compiler
 @set DJGPP=C:\Apps\Programming\djgpp\djgpp.env

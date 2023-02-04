@@ -3,12 +3,11 @@
 /* Copyright (C) J.G.Harston, 1997-2003,2018			*/
 /* v0.11: con_wrch(9) uses gotoxy()				*/
 /* v0.12: added local versions of CONIO funcions		*/
-/*        added con_getxy(), filled in and corrected JP keys	*/
-/*        Ctrl/Shift handling of special keys rewritten		*/
+/* added con_getxy(), filled in and corrected JP keys		*/
+/* Ctrl/Shift handling of special keys rewritten		*/
 /* v0.13: added ANSI input and output				*/
 /* v0.14: added DOS GetASyncKeyState and CONIO colours		*/
 /*        added bright background colours			*/
-/* v0.15: Alt-PrintableCharacters return 0x100+n		*/
 /*								*/
 /* ANSI output can be enabled with #define CONVDU_ANSI		*/
 /* linux target defaults to using CONVDU_ANSI			*/
@@ -126,7 +125,8 @@ void gotoxy(int x, int y) { }
 char vduq[10];
 int vduqlen=0;
 #ifdef CONVDU_ANSI
-char ansichars[]="\x1B[25;24;27;21;30m";
+char ansichars[]="\x1B[0;1;5;4;7;30;40;100;4m";
+int ansifgd='7'; int ansibgd='0';
 #endif
 
 
@@ -141,43 +141,42 @@ if (isatty(fileno(stdout)) == 0) { putchar(c); return; }
 if (vduqlen) {
   vduq[vduqlen--]=c;
   if (vduqlen != 0) return;
-  c=vduq[1];
   switch(vduq[0]) {
     case 17:						/* COLOUR	*/
-      if ((c & 0xC0) == 0xC0) return;			/* Border	*/
+      if ((vduq[1] & 0xC0) == 0xC0) return;		/* Border	*/
 #ifdef CONVDU_ANSI
-      seq=&ansichars[2];				/* CHR$27;"["	*/
-      if ((c & 0x10)==0) *seq++='2';
-      *seq++='5'; *seq++=';';				/* Flash	*/
-      if ((c & 0x20)==0) *seq++='2';
-      *seq++='4'; *seq++=';';				/* Underline	*/
-      if ((c & 0x40)==0) *seq++='2';
-      *seq++='7'; *seq++=';';				/* Inverse	*/
-      if (c & 0x80) {
-        *seq++='4'; *seq++='0'+(c & 7);			/* Background	*/
-        if (c & 0x08) { *seq++=';';
-                        *seq++='1';
-                        *seq++='0'; 
-                        *seq++='0'+(c & 7);		/* Bright bgnd	*/
-        }
-      } else {
-        if ((c & 0x08)==0) *seq++='2';
-        *seq++='1'; *seq++=';';				/* Bright fgnd	*/
-        *seq++='3'; *seq++='0'+(c & 7);			/* Foreground	*/
+      seq=&ansichars[4];
+      if (vduq[1] & 0x10) { *seq++='5'; *seq++=';'; }	/* Flash	*/
+      if (vduq[1] & 0x20) { *seq++='4'; *seq++=';'; }	/* Underline	*/
+      if (vduq[1] & 0x40) { *seq++='7'; *seq++=';'; }	/* Inverse	*/
+      if (vduq[1] & 0x80) ansibgd=(vduq[1] & 15);	/* Set bgnd	*/
+      else                ansifgd=(vduq[1] & 15);	/* Set fgnd	*/
+      *seq++='3'; *seq++='0'+(ansifgd & 7); *seq++=';';	/* Foreground	*/
+      if (ansifgd & 0x08) { *seq++='1'; *seq++=';'; }	/* Bright fgnd	*/
+      *seq++='4';					/* Background	*/
+      if (ansibgd & 15) *seq++='0'+(ansibgd & 7);
+      else              *seq++='9';
+      if (ansibgd & 0x08) {				/* Bright bgnd	*/
+        *seq++=';'; *seq++='1';
+        *seq++='0'; *seq++='0'+(ansibgd & 7);
+#ifdef CONVDU_PC
+        *seq++=';'; *seq++='4';
+#endif
       }
       *seq++='m'; *seq++=0;
       fputs(ansichars,stdout);
 #else
 #ifdef USECONIO
-      c=colourmap[c & 15];
+      c=colourmap[vduq[1] & 15];
       if (vduq[1] & 128) textbackground(c & 7);			/* Background	*/
-      else           textcolor((c & 15) | ((vduq[1] & 16)<<3));	/* Foreground	*/
+      else           textcolor((c & 15) | ((vduq[1] & 8)<<4));	/* Foreground	*/
 #endif
 #endif
     break;
     case 22:					/* MODE		*/
 #ifdef CONVDU_ANSI
       fputs("\x1B[0m",stdout);			/* Reset colours*/
+      ansifgd='7'; ansibgd='0';
 #else
 #ifdef USECONIO
       textattr(7);				/* Reset colours*/
@@ -188,7 +187,6 @@ if (vduqlen) {
     }
   return;
   }
-vduq[0]=c;
 switch (c) {
 #ifdef CONVDU_PC
   case 8:   putch(8); break;			/* Move left	*/
@@ -213,20 +211,21 @@ switch (c) {
 #endif /* !CONVDU_PC */
 
   case 12:  clrscr(); break;			/* CLS		*/
-  case 17:  vduqlen=1; break;			/* COLOUR	*/
+  case 17:  vduq[0]=c; vduqlen=1; break;	/* COLOUR	*/
   case 20:
 #ifdef CONVDU_ANSI
             fputs("\x1B[0m",stdout);		/* Reset colours*/
+            ansifgd='7'; ansibgd='0';
 #else
 #ifdef USECONIO
             textattr(7);			/* Reset colours*/
 #endif
 #endif
             break;
-  case 22:  vduqlen=1; break;			/* MODE		*/
-  case 23:  vduqlen=9; break;			/* VDU 23	*/
+  case 22:  vduq[0]=c; vduqlen=1; break;	/* MODE		*/
+  case 23:  vduq[0]=c; vduqlen=9; break;	/* VDU 23	*/
   case 30:  gotoxy(1,1); break;			/* HOME		*/
-  case 31:  vduqlen=2; break;			/* TAB()	*/
+  case 31:  vduq[0]=c; vduqlen=2; break;	/* TAB()	*/
 #ifdef USECONIO
   case 127: putch(8); putch(32); putch(8); break;
   default:  putch(c);
@@ -289,30 +288,30 @@ return l;
 #ifdef CONKBD_PC
 /* key <0xC0 is returned key, else base key to xor with Shift/Ctrl/Alt			*/
 unsigned char winkey[]={
-0x00,0x1B,0x02,0x03,0x04,0x05,0x06,0x07, /* 00 Break,aEsc,02,c2,04,05,06,07		*/
-0xc4,0xc5,0x0a,0x0b,0x0c,0x0d,0x08,0xc5, /* 08 sBS,sTAB,(sRET),0B,0C,0D,aBS,sTAB	*/
-0x71,0x77,0x65,0x72,0x74,0x79,0x75,0x69, /* 10 aQ,aW,aE,aR,aT,aY,aU,aI			*/
-0x6f,0x70,0x5b,0x5d,0x0d,0x1e,0x61,0x73, /* 18 aO,aP,a[,a],aRET,(ctrl),aA,aS		*/
-0x64,0x66,0x67,0x68,0x6a,0x6b,0x6c,0x3b, /* 20 aD,aF,aG,aH,aJ,aK,aL,a;			*/
-0x27,0x60,0x2a,0x23,0x7a,0x78,0x63,0x76, /* 28 a',a`,(lshf),a#,aZ,aX,aC,aV		*/
-0x62,0x6e,0x6d,0x2c,0x2e,0x2f,0x36,0x2a, /* 30 aB,aN,aM,a<,a>,a?,(rshf),aK*		*/
-0x38,0xA0,0x3a,0x81,0x82,0x83,0x84,0x85, /* 38 (alt),aSPC,(cap),F1,F2,F3,F4,F5		*/
-0x86,0x87,0x88,0x89,0x8a,0x45,0x46,0xc8, /* 40 F6,F7,F8,F9,F10,(num),(scrl),Home	*/
-0xcf,0xcb,0x2d,0xcc,0x4c,0xcd,0x2b,0xc9, /* 48 Up,PgUp,aK-,<-,K5,->,aK+,End		*/
-0xce,0xca,0xc6,0xc7,0x91,0x92,0x93,0x94, /* 50 Down,PgDn,Ins,Del,sF1,sF2,sF3,sF4	*/
-0x95,0x96,0x97,0x98,0x99,0x9a,0xa1,0xa2, /* 58 sF5,sF6,sF7,sF8,sF9,sF10,cF1,cF2		*/
-0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa, /* 60 cF3,cF4,cF5,cF6,cF7,cF8,cF9,cF10		*/
-0xb1,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8, /* 68 aF1,aF2,aF3,aF4,aF5,aF6,aF7,aF8		*/
-0xb9,0xba,0xa0,0xcc,0xcd,0xc9,0xca,0xc8, /* 70 aF9,aF10,cPrint,c<-,c->,cEnd,cPgDn,cHome	*/
-0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38, /* 78 a1,a2,a3,a4,a5,a6,a7,a8			*/
-0x39,0x30,0x2d,0x3d,0xcb,0x8b,0x8c,0x9b, /* 80 a9,a0,a-,a=,cPgUp,F11,F12,sF11		*/
-0x9c,0xab,0xac,0xbb,0xbc,0xcf,0x2d,0xc5, /* 88 sF12,cF11,cF12,aF11,aF12,cUp,cK-,cK5	*/
-0x2b,0xce,0xc6,0xc7,0xc5,0x2f,0x2a,0xc8, /* 90 cK+,cDown,cIns,cDel,cTab,cK/,cK*,aHome	*/
-0xcf,0xcb,0x9a,0xcc,0x9c,0xcd,0x9e,0xc9, /* 98 aUp,aPgUp,aK-,a<-,aK5,a->,aK+,aEnd	*/
-0xce,0xca,0xc6,0xc7,0x2f,0xc5,0x0a,0xc6, /* A0 aDn,aPgDn,aIns,aDel,aK/,aTab,aKEntr,jHEN	*/
-0xc6,0xc6,0xc8,0xc5,0xc5,0xc5,0xc5,0xc2, /* A8 sjHEN,cjHEN,ajHEN,jMUK,sjMUK,cjMUK,ajMUK,WIDTH   */
-0xc2,0xc2,0xf3,0xc4,0xc4,0xc9,0xc7,0xc7, /* B0 sWIDTH,cWIDTH,aWIDTH,jCAP,cjCAP,ajCAP,jKAN,sjKAN */
-0xc7,0xc7,0xba,0xbb,0xbc,0xbd,0xbe,0xbf, /* B8 cjKAN,ajKAN */
+0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07, /* 00-07					*/
+0xc4,0xc5,0x0d,0x0b,0x0c,0x0d,0xc4,0xc5, /* sBS,sTAB,sRET,0C-0D,xBS,sTAB		*/
+0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17, /* 10-17					*/
+0x18,0x19,0x1a,0xd3,0x0d,0x1d,0x1e,0x1f, /* 18-1A,sESC,aRET,1D-1F			*/
+0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27, /* 20-27					*/
+0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f, /* 28-2F					*/
+0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37, /* 30-37					*/
+0x38,0x39,0x3a,0x81,0x82,0x83,0x84,0x85, /* 38-3A,F1-F5					*/
+0x86,0x87,0x88,0x89,0x8a,0x45,0x46,0xc8, /* F6-F10,45,46,Home				*/
+0xcf,0xcb,0x4a,0xcc,0x4c,0xcd,0x4e,0xc9, /* Up,PgUp,4A,<-,4C,->,4E,End			*/
+0xce,0xca,0xc6,0xc7,0x91,0x92,0x93,0x94, /* Down,PgDn,Ins,Del,sF1-sF4			*/
+0x95,0x96,0x97,0x98,0x99,0x9a,0xa1,0xa2, /* sF5-sF10,cF1,cF2				*/
+0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa, /* cF3-cF10					*/
+0xb1,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8, /* aF1-aF8					*/
+0xb9,0xba,0xa0,0xcc,0xcd,0xc9,0xca,0xc8, /* aF9-aF10,cPrint,c<-,c->,cEnd,cPgDn,cHome	*/
+0xcb,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f, /* cPgUp,79-7F					*/
+0x80,0x81,0x82,0x83,0xcb,0x8b,0x8c,0x9b, /* 80-83,cPgUp,F11-12,sF11			*/
+0x9c,0xab,0xac,0xbb,0xbc,0xcf,0x8e,0x8f, /* sF12,cF11-12,aF11-12,cUp,8E-8F		*/
+0x90,0xce,0xc6,0xc7,0xc5,0x95,0x96,0xc8, /* 90,cDown,cIns,cDel,cTab,95,96,aHome		*/
+0xcf,0xcb,0x9a,0xcc,0x9c,0xcd,0x9e,0xc9, /* aUp,aPgUp,9A,a<-,9C,a->,9E,aEnd		*/
+0xce,0xca,0xc6,0xc7,0xa4,0xc5,0xa6,0xa7, /* aDn,aPgDn,aIns,aDel,A4,aTab,A6,A7		*/
+0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xc2, /* A8-AE,WIDTH					*/
+0xc2,0xc2,0xf3,0xb3,0xb4,0xb5,0xb6,0xb7, /* sWIDTH,cWIDTH,aWIDTH			*/
+0xb8,0xb9,0xba,0xbb,0xbc,0xbd,0xbe,0xbf,
 0xc0,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,
 0xc8,0xc9,0xca,0xcb,0xcc,0xcd,0xce,0xcf,
 0xd0,0xd1,0xd2,0xd3,0xd4,0xd5,0xd6,0xd7,
@@ -349,28 +348,21 @@ if (isatty(fileno(stdin)) == 0) if ((ch=getchar()) != EOF) return ch;
 #ifndef CONKBD_ANSI
 #ifdef CONKBD_PC
 ch=getch();				/* Read from console		*/
-if (ch != 0 && ch != 0x3F && ch != 0xE0)
-  return ch;				/* Standard keyboard chars	*/
+/* to do: if <0x20 and modifier pressed, do a translate */
+if (ch != 0 && ch != 0xe0) return ch;	/* Standard keyboard chars	*/
 s=(GetAsyncKeyState(VK_SHIFT)<0);	/* Check for modifier keys	*/
 c=(GetAsyncKeyState(VK_CONTROL)<0);
-if (a=(GetAsyncKeyState(VK_MENU)<0)) c=0;
-if (ch == 0x3F) {
-  if (a) { ch=0x7B; } else { return 0x3F; }
-  } else {
-  ch=getch();
-  }
-					/* Special cases		*/
-if (ch == 0x00) return 0x1C3;		/* Break			*/
-if (ch == 0x03) return 0x000;		/* Ctrl-2           -> Ctrl-@	*/
-if (ch == 0x29) return 0x07C;		/* Alt-Top-left key -> bar	*/
-if (ch == 0x7B) return 0x0A4;		/* Alt-4            -> euro	*/
-if (ch == 0x86) if (c) ch=0x84;		/* Separate F12 and cPgUp	*/
+if(a=(GetAsyncKeyState(VK_MENU)<0)) c=0;
+ch=getch();
+if (ch == 0x29) return 0xAC;		/* Alt-Top-left key		*/
+if (ch == 0x7B) return 0xA4;		/* Alt-4 - Euro			*/
+if (ch == 0x86) if (c) ch=0x78;		/* Separate F12 and cPgUp	*/
 if (((ch=winkey[ch] | 0x100) & 0xC0) < 0xC0)
-  return ch;				/* Translate keys, return 100-1BF */
+  return ch;				/* Translate keys, return 80-BF	*/
 if (s) ch=ch ^ 0x10;			/* SHIFT pressed		*/
 if (c) ch=ch ^ 0x20;			/* CTRL pressed			*/
 if (a) ch=ch ^ 0x30;			/* ALT pressed			*/
-return ch;
+return ch;				/* Other keys need extra help	*/
 #else
 return getchar();
 #endif
@@ -394,16 +386,16 @@ if (ch=='O') mod=1;			/* Convert <esc>O to <esc>[1	*/
   else if(ch!='[') return (ch | 0x100);	/* Not opening <esc>[ or <esc>O	*/
 
 while ((ch=getchar())<'@') {		/* Parse through non-alphas	*/
-  if (ch>='0' && ch<='9') {		/* Digit, add to current num	*/
+  if (ch>='0' && ch<='9') {		/* Digit - add to current num	*/
     mod=mod*10+(ch-'0');
     }
-  if (ch==';') {			/* Semicolon, next number	*/
+  if (ch==';') {			/* Semi - step to next number	*/
     key=mod; mod=0;
     }
   }
 if (key==0) { key=mod; mod=1; }		/* Special cases		*/
 if (ch>='A' && ch<='D') key=39-(ch-'A');
-if (ch>='P' && ch<='T') key=11+(ch-'P');
+if (ch>='P' && ch<='S') key=11+(ch-'P');
 if (ch=='F') key=4;
 if (ch=='H') key=1;
 mod=mod-1;				/* Convert modifiers to bitmap	*/
@@ -563,7 +555,7 @@ key = (key & 0xffff) ^ 0xffff;		/* Convert to keyscan number	*/
 if (key <0x080) {			/* Scan for single key		*/
 #ifndef DJGPP			/* DJGPP doesn't support GetKbdLayout	*/
   if (((int)(GetKeyboardLayout(0)) & 0xFFFF)==0x0411) {
-				/* ECMA layout keyboard			*/
+				/* BBC layout keyboard			*/
 /* Note: if a console app, this is the ID from when the program started	*/
     switch (key) {
       case 24: return (GetAsyncKeyState(0xDE)<0 ? -1 : 0); /* ^~      */

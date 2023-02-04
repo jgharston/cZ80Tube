@@ -4,13 +4,14 @@
  See the accompanying file LICENSE for authors and terms of use.
 
    31-Jul-2004 DD:  OSWORD 127 disk image access
+   15-Mar-2006 JGH: Corrected disk result and error numbers
 
    Visible functions:
    disk_init()    - Initialise disk system
    osword_127()   - Disk sector access
    cli_mount()    - Mount disk image
    cli_dismount() - Dismount disk image
-   cli_show()     - Show mounts
+   cli_mounts()   - Show mounts
 
    Internal functions:
    disk_fdc()     - Do a disk access
@@ -67,7 +68,7 @@ int disk_mount(int drive, char *name) {
 
   if (drive < 0 || drive >= MAX_DRIVES) return DISK_BAD_DRIVE;
   f = fopen(name, "rb+");
-  if (f == 0) return DISK_NOT_FOUND;
+  if (f == 0) return DISK_DRIVE_EMPTY;
   count = fread(start, 8, 1, f);
   if (count != 1) {	/* 8 bytes read? */
     fclose(f);
@@ -259,7 +260,7 @@ void disk_init(void) {
       case DISK_BAD_DRIVE:
         printf("Drive number %d is out of the range 0..%d\n", n, MAX_DRIVES);
         break;
-      case DISK_NOT_FOUND:
+      case DISK_DRIVE_EMPTY:
         printf("Disk image '%s' not found for drive %d\n", file, n);
         break;
       case DISK_BAD_FORMAT:
@@ -324,11 +325,11 @@ void osword_127(void) {
 /*
  * I/O processor addresses are -ve numbers if treated as signed
  */
-    mem[res_offset] = DISK_BAD_COMMAND;	/* Bad Osword 127 command	*/
+    mem[res_offset] = DISK_BAD_ADDR;	/* Bad address			*/
     return;
   }
   if (op != DISK_READ && op != DISK_WRITE) {
-    mem[res_offset] = DISK_BAD_COMMAND;	/* Bad Osword 127 command	*/
+    mem[res_offset] = DISK_BAD_COMMAND;	/* Unsupported OSWORD 127 command */
     return;
   }
   if (drive > MAX_DRIVES) {
@@ -345,7 +346,7 @@ void osword_127(void) {
     return;
   }
   if (sector_size > 2) {	/* 0 (128), 1 (256) and 2 (512) only */
-    mem[res_offset] = DISK_FAILED;	/* Bad sector size		*/
+    mem[res_offset] = DISK_BAD_ID;	/* Bad sector size		*/
     return;
   }
   if (sector_count > MAX_SECTORS) {
@@ -354,7 +355,7 @@ void osword_127(void) {
   }
   sector_size = 128 << sector_size;
   if (sector_size > disks[drive_no]. sector_size) {
-    mem[res_offset] = DISK_FAILED;	/* Bad sector size		*/
+    mem[res_offset] = DISK_BAD_ID;	/* Bad sector size		*/
     return;
   }
 
@@ -365,7 +366,7 @@ void osword_127(void) {
  * it is an error to attempt to do this
  */
   if (addr >= 0 && addr + sector_size * sector_count >= 0x10000) {
-    mem[res_offset] = DISK_BAD_COMMAND;	/* Bad data length		*/
+    mem[res_offset] = DISK_BAD_ADDR;	/* Bad data length		*/
     return;
   }
   mem[res_offset] = disk_fdc(drive, track, sector, sector_count, sector_size, addr, op);
@@ -389,19 +390,19 @@ int cli_mount(void) {
   drive = (int) strtol(p, &p, 10);
   if (*p != ' ') return 0;	/* Bad syntax, pass to external		*/
   if (drive > MAX_DRIVES -1 ) {
-      z80error(254, "Bad drive", "");
+      z80error(DFS_BAD_DRIVE, "Bad drive", "");
       return 1;
     }
   while (isspace(*p)) p++;	/* Move to <filename>			*/
   if (*p < ' ') return 0;	/* Bad syntax, pass to external		*/
   rc = disk_mount(drive, p);	/* Associate this image with this drive	*/
   switch (rc) {
-  case DISK_NOT_FOUND:
-    z80error(214, p, " not found"); return 1;
+  case DISK_DRIVE_EMPTY:
+    z80error(DFS_DRIVE_EMPTY, p, " not found"); return 1;
   case DISK_BAD_FORMAT:
-    z80error(214, p, " not Acorn CP/M disk"); return 1;
+    z80error(DFS_DISK_CHANGED, p, " not Acorn CP/M disk"); return 1;
   case DISK_DUP_DISK:
-    z80error(214, p, " already mounted"); return 1;
+    z80error(DFS_DUPLICATE, p, " already mounted"); return 1;
   default:
     break;
   }
@@ -421,18 +422,18 @@ int cli_dismount(void) {
   if (!isdigit(*p)) return 0;	/* Bad syntax, pass to external		*/
   drive = (int) strtol(p, &p, 10);
   if (drive > MAX_DRIVES -1 ) {
-      z80error(254, "Bad drive", "");
+      z80error(DFS_BAD_DRIVE, "Bad drive", "");
       return 1;
     }
   rc = disk_dismount(drive);
   if (rc == DISK_NOT_MOUNTED) {
-    z80error(214, "No disk mounted", ""); return 1;
+    z80error(DFS_DRIVE_EMPTY, "No disk mounted", ""); return 1;
   }
   return 1;
 }
 
 /*
- * cli_show - Called to handle the 'show' command
+ * cli_mounts - Called to handle the 'mounts' command
  */
 int cli_mounts(void) {
   (void) disk_show();
